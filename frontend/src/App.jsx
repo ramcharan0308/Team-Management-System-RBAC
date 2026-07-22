@@ -40,9 +40,12 @@ export default function App() {
             <Route path="projects" element={<Navigate to="/teams" replace />} />
             <Route path="projects/:id" element={<Navigate to="/teams" replace />} />
             <Route path="my-tasks" element={<MyTasks />} />
+            
+            {/* System Governance Routes (Read-only for Manager/Viewer, Full for Admin) */}
             <Route path="users" element={<Users />} />
             <Route path="roles" element={<Roles />} />
             <Route path="permissions" element={<Permissions />} />
+            
             <Route path="permission-viewer" element={<PermissionViewer />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

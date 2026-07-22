@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   LayoutDashboard, 
-  Users, 
+  Users as UsersIcon, 
   ShieldCheck, 
   KeyRound, 
   Eye, 
@@ -156,7 +156,7 @@ const PAGE_TITLES = {
 };
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user, logout, canAccessAdminPages, hasPermission, refetchTeams } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -164,6 +164,7 @@ export default function Layout() {
   const [showUserModal, setShowUserModal] = useState(false);
   const [teamForm, setTeamForm] = useState({ name: '', description: '' });
   const [userForm, setUserForm] = useState({ name: '', email: '', password: '' });
+  const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleLogout = () => { logout(); navigate('/login'); };
@@ -187,8 +188,8 @@ export default function Layout() {
       await api.post('/teams', teamForm);
       setShowTeamModal(false);
       setTeamForm({ name: '', description: '' });
+      refetchTeams();
       navigate('/teams');
-      window.location.reload();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to create team');
     } finally {
@@ -198,15 +199,19 @@ export default function Layout() {
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
+    setFormError('');
+    if (!userForm.password || !userForm.password.trim()) {
+      setFormError('Initial password is required.');
+      return;
+    }
     setSaving(true);
     try {
       await api.post('/users', userForm);
       setShowUserModal(false);
       setUserForm({ name: '', email: '', password: '' });
       navigate('/users');
-      window.location.reload();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to invite user');
+      setFormError(err.response?.data?.error || 'Failed to invite user');
     } finally {
       setSaving(false);
     }
@@ -231,9 +236,11 @@ export default function Layout() {
         <NavItem to="/my-tasks" icon={CheckSquare} label="My Tasks" />
 
         <div style={s.sectionHeader}>RBAC Governance</div>
-        <NavItem to="/users" icon={Users} label="Users" />
+        <NavItem to="/users" icon={UsersIcon} label="Users" />
         <NavItem to="/roles" icon={ShieldCheck} label="Roles" />
         <NavItem to="/permissions" icon={KeyRound} label="Permissions" />
+
+        <div style={s.sectionHeader}>Inspection</div>
         <NavItem to="/permission-viewer" icon={Eye} label="Permission Viewer" />
 
         <div style={s.spacer} />
@@ -269,23 +276,27 @@ export default function Layout() {
 
             {/* Quick Actions */}
             <div style={{ display: 'flex', gap: '8px' }}>
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setShowTeamModal(true)}
-                style={{ ...s.actionBtn, ...s.btnPrimary }}
-              >
-                <Plus size={14} /> Create Team
-              </motion.button>
+              {hasPermission('CREATE_TEAM') && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowTeamModal(true)}
+                  style={{ ...s.actionBtn, ...s.btnPrimary }}
+                >
+                  <Plus size={14} /> Create Team
+                </motion.button>
+              )}
               
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setShowUserModal(true)}
-                style={{ ...s.actionBtn, ...s.btnSecondary }}
-              >
-                <UserPlus size={14} /> Invite User
-              </motion.button>
+              {canAccessAdminPages && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => { setShowUserModal(true); setFormError(''); }}
+                  style={{ ...s.actionBtn, ...s.btnSecondary }}
+                >
+                  <UserPlus size={14} /> Invite User
+                </motion.button>
+              )}
             </div>
           </div>
         </div>
@@ -331,6 +342,13 @@ export default function Layout() {
               <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)' }}>Invite New User</h2>
               <button style={{ cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => setShowUserModal(false)}><X size={18} /></button>
             </div>
+
+            {formError && (
+              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'var(--danger-light)', border: '1px solid rgba(239, 68, 68, 0.2)', color: 'var(--danger-text)', fontSize: '12px', fontWeight: 500, marginBottom: '16px' }}>
+                {formError}
+              </div>
+            )}
+
             <form onSubmit={handleCreateUser}>
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>FULL NAME</label>
@@ -341,8 +359,8 @@ export default function Layout() {
                 <input style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: '14px', fontWeight: 500 }} type="email" value={userForm.email} onChange={e => setUserForm(f => ({ ...f, email: e.target.value }))} placeholder="john@company.com" required />
               </div>
               <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>INITIAL PASSWORD (OPTIONAL)</label>
-                <input style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: '14px', fontWeight: 500 }} type="password" value={userForm.password} onChange={e => setUserForm(f => ({ ...f, password: e.target.value }))} placeholder="••••••••" />
+                <label style={{ display: 'block', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>INITIAL PASSWORD</label>
+                <input style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: '14px', fontWeight: 500 }} type="password" value={userForm.password} onChange={e => { setUserForm(f => ({ ...f, password: e.target.value })); if (formError) setFormError(''); }} placeholder="••••••••" required />
               </div>
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                 <button type="button" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: 'var(--radius-md)', padding: '10px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => setShowUserModal(false)}>Cancel</button>

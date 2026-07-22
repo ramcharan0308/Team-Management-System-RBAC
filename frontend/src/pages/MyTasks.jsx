@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
 const STATUS_COLORS = { todo: 'var(--text-muted)', inprogress: 'var(--accent)', done: 'var(--green)' };
 const PRIORITY_COLORS = { low: 'var(--green)', medium: 'var(--yellow)', high: 'var(--red)' };
@@ -31,6 +33,20 @@ const s = {
   empty: { textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)', border: '2px dashed var(--border)', borderRadius: 'var(--radius-lg)' },
 };
 
+// Helper function to extract assignee ID string safely
+const getTaskAssigneeId = (t) => {
+  if (!t) return null;
+  if (typeof t.assigned_to === 'string' && t.assigned_to !== '[object Object]') return t.assigned_to;
+  if (typeof t.assignedTo === 'string' && t.assignedTo !== '[object Object]') return t.assignedTo;
+  if (t.assignedTo && typeof t.assignedTo === 'object') {
+    return t.assignedTo.id || t.assignedTo._id || null;
+  }
+  if (t.assigned_to && typeof t.assigned_to === 'object') {
+    return t.assigned_to.id || t.assigned_to._id || null;
+  }
+  return null;
+};
+
 export default function MyTasks() {
   const { user } = useAuth();
   const [allTasks, setAllTasks] = useState([]);
@@ -38,22 +54,29 @@ export default function MyTasks() {
   const [filter, setFilter] = useState('all');
   const navigate = useNavigate();
 
+  // Delete task state
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  const loadAll = async () => {
+    try {
+      const teamRes = await api.get('/teams').catch(() => api.get('/projects'));
+      const teamsList = teamRes.data || [];
+      const taskArrays = await Promise.all(
+        teamsList.map(t => api.get(`/tasks?team_id=${t.id}`).then(r => r.data.map(tk => ({ ...tk, team_name: t.name, team_id: t.id }))))
+      );
+      const currentUserId = user?.id;
+      const mine = taskArrays.flat().filter(t => getTaskAssigneeId(t) === currentUserId);
+      setAllTasks(mine);
+    } catch (err) {
+      console.error('Error loading my tasks:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadAll = async () => {
-      try {
-        const teamRes = await api.get('/teams').catch(() => api.get('/projects'));
-        const teamsList = teamRes.data || [];
-        const taskArrays = await Promise.all(
-          teamsList.map(t => api.get(`/tasks?team_id=${t.id}`).then(r => r.data.map(tk => ({ ...tk, team_name: t.name, team_id: t.id }))))
-        );
-        const mine = taskArrays.flat().filter(t => (t.assigned_to === user?.id || t.assignedTo === user?.id));
-        setAllTasks(mine);
-      } catch (err) {
-        console.error('Error loading my tasks:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     if (user?.id) loadAll();
   }, [user]);
 
@@ -63,6 +86,21 @@ export default function MyTasks() {
       setAllTasks(tasks => tasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to update task status');
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    setDeleteError('');
+    try {
+      await api.delete(`/tasks/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      loadAll();
+    } catch (err) {
+      setDeleteError(err.response?.data?.error || 'Failed to delete task');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -131,19 +169,48 @@ export default function MyTasks() {
                   )}
                 </div>
               </div>
-              <select
-                style={s.statusSelect}
-                value={task.status}
-                onChange={e => handleStatusChange(task, e.target.value)}
-              >
-                <option value="todo">To Do</option>
-                <option value="inprogress">In Progress</option>
-                <option value="done">Done</option>
-              </select>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <select
+                  style={s.statusSelect}
+                  value={task.status}
+                  onChange={e => handleStatusChange(task, e.target.value)}
+                >
+                  <option value="todo">To Do</option>
+                  <option value="inprogress">In Progress</option>
+                  <option value="done">Done</option>
+                </select>
+                <button
+                  onClick={() => { setDeleteTarget(task); setDeleteError(''); }}
+                  style={{
+                    cursor: 'pointer',
+                    color: 'var(--danger)',
+                    background: 'var(--danger-light)',
+                    border: 'none',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '6px 8px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                  }}
+                  title="Delete task"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
             </div>
           );
         })
       )}
+
+      {/* Confirm Delete Task Modal */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        title={`Delete task "${deleteTarget?.title}"?`}
+        message="This action cannot be undone."
+        error={deleteError}
+        loading={deleteLoading}
+      />
     </div>
   );
 }

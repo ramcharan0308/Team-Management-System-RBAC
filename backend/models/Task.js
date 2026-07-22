@@ -47,10 +47,41 @@ const taskSchema = new mongoose.Schema({
 taskSchema.set('toJSON', {
   transform: (doc, ret) => {
     ret.id = ret._id.toString();
-    ret.project_id = ret.team ? ret.team.toString() : null;
+    ret.project_id = ret.team ? (ret.team._id ? ret.team._id.toString() : ret.team.toString()) : null;
+    ret.team_id = ret.project_id;
     ret.due_date = ret.dueDate;
-    ret.assigned_to = ret.assignedTo ? ret.assignedTo.toString() : null;
-    ret.created_by = ret.createdBy ? ret.createdBy.toString() : null;
+
+    let assigneeId = null;
+    if (ret.assignedTo) {
+      if (typeof ret.assignedTo === 'string') {
+        assigneeId = ret.assignedTo;
+      } else if (ret.assignedTo._id) {
+        assigneeId = ret.assignedTo._id.toString();
+      } else if (ret.assignedTo.id) {
+        assigneeId = ret.assignedTo.id.toString();
+      } else if (typeof ret.assignedTo.toString === 'function' && ret.assignedTo.toString() !== '[object Object]') {
+        assigneeId = ret.assignedTo.toString();
+      }
+    }
+
+    let creatorId = null;
+    if (ret.createdBy) {
+      if (typeof ret.createdBy === 'string') {
+        creatorId = ret.createdBy;
+      } else if (ret.createdBy._id) {
+        creatorId = ret.createdBy._id.toString();
+      } else if (ret.createdBy.id) {
+        creatorId = ret.createdBy.id.toString();
+      } else if (typeof ret.createdBy.toString === 'function' && ret.createdBy.toString() !== '[object Object]') {
+        creatorId = ret.createdBy.toString();
+      }
+    }
+
+    ret.assigned_to = assigneeId;
+    ret.assignedTo = assigneeId;
+    ret.created_by = creatorId;
+    ret.createdBy = creatorId;
+
     delete ret._id;
     delete ret.__v;
     return ret;

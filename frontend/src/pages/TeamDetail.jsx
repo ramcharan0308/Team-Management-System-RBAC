@@ -4,12 +4,34 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Plus, Users, LayoutGrid, Trash2, UserPlus, Shield, Calendar, X } from 'lucide-react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
 const STATUSES = ['todo', 'inprogress', 'done'];
 const STATUS_LABELS = { todo: 'To Do', inprogress: 'In Progress', done: 'Completed' };
 const STATUS_COLORS = { todo: '#64748b', inprogress: '#2563eb', done: '#22c55e' };
 const PRIORITY_COLORS = { low: '#15803d', medium: '#b45309', high: '#b91c1c' };
 const PRIORITY_BG = { low: '#f0fdf4', medium: '#fffbeb', high: '#fef2f2' };
+
+// Helper to determine role rank weight (Admin > Manager > Viewer)
+const getRoleWeight = (roleName) => {
+  if (/^Admin$/i.test(roleName)) return 3;
+  if (/^Manager$/i.test(roleName)) return 2;
+  return 1; // Default for Viewer
+};
+
+// Helper to extract clean string ID for assignee
+const getAssigneeId = (t) => {
+  if (!t) return '';
+  if (typeof t.assigned_to === 'string' && t.assigned_to !== '[object Object]') return t.assigned_to;
+  if (typeof t.assignedTo === 'string' && t.assignedTo !== '[object Object]') return t.assignedTo;
+  if (t.assignedTo && typeof t.assignedTo === 'object') {
+    return t.assignedTo.id || t.assignedTo._id || '';
+  }
+  if (t.assigned_to && typeof t.assigned_to === 'object') {
+    return t.assigned_to.id || t.assigned_to._id || '';
+  }
+  return '';
+};
 
 function TaskModal({ team, members, onClose, onSaved, task, canEditTask }) {
   const [form, setForm] = useState({
@@ -18,7 +40,7 @@ function TaskModal({ team, members, onClose, onSaved, task, canEditTask }) {
     description: task?.description || '',
     due_date: task?.due_date || task?.dueDate || '',
     priority: task?.priority || 'medium',
-    assigned_to: task?.assigned_to || task?.assignedTo || '',
+    assigned_to: getAssigneeId(task),
   });
   const [saving, setSaving] = useState(false);
 
@@ -26,9 +48,10 @@ function TaskModal({ team, members, onClose, onSaved, task, canEditTask }) {
     e.preventDefault();
     setSaving(true);
     try {
+      const selectedAssignee = form.assigned_to || null;
       const payload = task
-        ? { status: form.status, ...(canEditTask ? form : {}) }
-        : { ...form, project_id: team.id, team_id: team.id };
+        ? { status: form.status, ...(canEditTask ? { ...form, assigned_to: selectedAssignee, assignedTo: selectedAssignee } : {}) }
+        : { ...form, assigned_to: selectedAssignee, assignedTo: selectedAssignee, project_id: team.id, team_id: team.id };
 
       if (task) {
         await api.patch(`/tasks/${task.id}`, payload);
@@ -111,13 +134,20 @@ export default function TeamDetail() {
   const [team, setTeam] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [availableRoles, setAvailableRoles] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('board');
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [editTask, setEditTask] = useState(null);
-  const [addMemberEmail, setAddMemberEmail] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [addMemberRole, setAddMemberRole] = useState('');
   const [addingMember, setAddingMember] = useState(false);
+
+  // Delete modals state
+  const [deleteTaskTarget, setDeleteTaskTarget] = useState(null);
+  const [deleteMemberTarget, setDeleteMemberTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const userPermissions = team?.permissions || [];
   const canCreateTask = userPermissions.includes('CREATE_TASK');
@@ -126,16 +156,20 @@ export default function TeamDetail() {
   const canManageMembers = userPermissions.includes('MANAGE_MEMBERS');
   const canAssignRole = userPermissions.includes('ASSIGN_ROLE') || canManageMembers;
 
+  const currentUserWeight = getRoleWeight(team?.role);
+
   const loadAll = async () => {
     try {
-      const [teamRes, taskRes, roleRes] = await Promise.all([
+      const [teamRes, taskRes, roleRes, userRes] = await Promise.all([
         api.get(`/teams/${id}`).catch(() => api.get(`/projects/${id}`)),
         api.get(`/tasks?project_id=${id}`),
         api.get('/roles').catch(() => ({ data: [] })),
+        api.get('/users').catch(() => ({ data: [] })),
       ]);
       setTeam(teamRes.data);
       setTasks(taskRes.data);
       setAvailableRoles(roleRes.data || []);
+      setAllUsers(userRes.data || []);
     } finally {
       setLoading(false);
     }
@@ -143,23 +177,33 @@ export default function TeamDetail() {
 
   useEffect(() => { loadAll(); }, [id]);
 
-  const handleDeleteTask = async (taskId) => {
-    if (!confirm('Delete this task?')) return;
+  const handleDeleteTaskConfirm = async () => {
+    if (!deleteTaskTarget) return;
+    setDeleteLoading(true);
+    setDeleteError('');
     try {
-      await api.delete(`/tasks/${taskId}`);
-      setTasks(tasks.filter(t => t.id !== taskId));
+      await api.delete(`/tasks/${deleteTaskTarget.id}`);
+      setDeleteTaskTarget(null);
+      loadAll();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to delete task');
+      setDeleteError(err.response?.data?.error || 'Failed to delete task');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
-  const handleRemoveMember = async (userId) => {
-    if (!confirm('Remove this member?')) return;
+  const handleRemoveMemberConfirm = async () => {
+    if (!deleteMemberTarget) return;
+    setDeleteLoading(true);
+    setDeleteError('');
     try {
-      await api.delete(`/teams/${id}/members/${userId}`);
+      await api.delete(`/teams/${id}/members/${deleteMemberTarget.id}`);
+      setDeleteMemberTarget(null);
       loadAll();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to remove member');
+      setDeleteError(err.response?.data?.error || 'Failed to remove member from team');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -174,10 +218,11 @@ export default function TeamDetail() {
 
   const handleAddMember = async (e) => {
     e.preventDefault();
+    if (!selectedUserId) return;
     setAddingMember(true);
     try {
-      await api.post(`/teams/${id}/members`, { email: addMemberEmail, role: addMemberRole || 'Viewer' });
-      setAddMemberEmail('');
+      await api.post(`/teams/${id}/members`, { userId: selectedUserId, role: addMemberRole || 'Viewer' });
+      setSelectedUserId('');
       loadAll();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to add member');
@@ -190,6 +235,17 @@ export default function TeamDetail() {
   if (!team) return <div style={{ padding: '32px' }}>Team not found</div>;
 
   const tasksByStatus = (status) => tasks.filter(t => t.status === status);
+
+  // Filter out registered users who are already members of this team
+  const currentMemberUserIds = new Set((team.members || []).map(m => m.id || m._id));
+  const availableUsersToInvite = allUsers.filter(u => !currentMemberUserIds.has(u.id || u._id));
+
+  // Roles available for user to assign based on rank hierarchy
+  const assignableRolesList = (availableRoles.length > 0 ? availableRoles : [
+    { id: 'Viewer', name: 'Viewer' },
+    { id: 'Manager', name: 'Manager' },
+    { id: 'Admin', name: 'Admin' }
+  ]).filter(r => getRoleWeight(r.name) <= currentUserWeight);
 
   return (
     <div style={{ maxWidth: '1150px' }}>
@@ -265,7 +321,8 @@ export default function TeamDetail() {
                 </div>
 
                 {colTasks.map(task => {
-                  const isAssignee = task.assigned_to === user?.id || task.assignedTo === user?.id;
+                  const taskAssigneeId = getAssigneeId(task);
+                  const isAssignee = Boolean(taskAssigneeId && user?.id && taskAssigneeId === user.id);
                   const canEditThis = canEditTask || isAssignee;
 
                   return (
@@ -298,8 +355,8 @@ export default function TeamDetail() {
                       {canDeleteTask && (
                         <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border-light)', paddingTop: '6px' }}>
                           <button
-                            onClick={e => { e.stopPropagation(); handleDeleteTask(task.id); }}
-                            style={{ cursor: 'pointer', color: 'var(--danger)', opacity: 0.7, padding: '2px' }}
+                            onClick={e => { e.stopPropagation(); setDeleteTaskTarget(task); setDeleteError(''); }}
+                            style={{ cursor: 'pointer', color: 'var(--danger)', opacity: 0.8, padding: '4px 6px', background: 'var(--danger-light)', border: 'none', borderRadius: 'var(--radius-sm)' }}
                             title="Delete Task"
                           >
                             <Trash2 size={14} />
@@ -322,19 +379,29 @@ export default function TeamDetail() {
             <div style={{ marginBottom: '24px', background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '24px', boxShadow: 'var(--shadow-xs)' }}>
               <div style={{ fontSize: '13px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '1px', marginBottom: '12px' }}>INVITE TEAM MEMBER</div>
               <form onSubmit={handleAddMember} style={{ display: 'flex', gap: '12px' }}>
-                <input style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: '14px' }} type="email" value={addMemberEmail} onChange={e => setAddMemberEmail(e.target.value)} placeholder="colleague@company.com" required />
-                <select style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: '13px', fontWeight: 600 }} value={addMemberRole} onChange={e => setAddMemberRole(e.target.value)}>
-                  {availableRoles.length > 0 ? (
-                    availableRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)
-                  ) : (
-                    <>
-                      <option value="Viewer">Viewer</option>
-                      <option value="Manager">Manager</option>
-                      <option value="Admin">Admin</option>
-                    </>
+                <select
+                  style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: '14px', color: 'var(--text-main)' }}
+                  value={selectedUserId}
+                  onChange={e => setSelectedUserId(e.target.value)}
+                  required
+                >
+                  <option value="">Select registered user to invite...</option>
+                  {availableUsersToInvite.map(u => (
+                    <option key={u.id || u._id} value={u.id || u._id}>
+                      {u.name} ({u.email})
+                    </option>
+                  ))}
+                  {availableUsersToInvite.length === 0 && (
+                    <option value="" disabled>All registered users are already members of this team</option>
                   )}
                 </select>
-                <button type="submit" style={{ background: 'var(--primary)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 20px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: addingMember ? 0.7 : 1 }} disabled={addingMember}>
+
+                <select style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: '13px', fontWeight: 600, color: 'var(--text-main)' }} value={addMemberRole} onChange={e => setAddMemberRole(e.target.value)}>
+                  {assignableRolesList.map(r => (
+                    <option key={r.id || r.name} value={r.name}>{r.name}</option>
+                  ))}
+                </select>
+                <button type="submit" style={{ background: 'var(--primary)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 20px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: (addingMember || !selectedUserId) ? 0.7 : 1 }} disabled={addingMember || !selectedUserId}>
                   <UserPlus size={16} /> Add
                 </button>
               </form>
@@ -343,45 +410,64 @@ export default function TeamDetail() {
 
           <div style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '24px', boxShadow: 'var(--shadow-xs)' }}>
             <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '16px' }}>Team Roster & Roles</div>
-            {team.members?.map(m => (
-              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 0', borderBottom: '1px solid var(--border-light)' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800, flexShrink: 0 }}>
-                  {m.name.charAt(0).toUpperCase()}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)' }}>{m.name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{m.email}</div>
-                </div>
+            {team.members?.map(m => {
+              const memberWeight = getRoleWeight(m.role);
+              const isSelf = m.id === user?.id;
+              const isHigherRank = memberWeight > currentUserWeight;
+              const canModifyMember = canAssignRole && !isSelf && !isHigherRank;
+              const canRemoveMember = canManageMembers && !isSelf && !isHigherRank;
 
-                {canAssignRole && m.id !== user?.id ? (
-                  <select
-                    style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-main)', padding: '6px 12px', borderRadius: 'var(--radius-md)', fontSize: '12px', fontWeight: 600 }}
-                    value={m.role}
-                    onChange={e => handleRoleChange(m.id, e.target.value)}
-                  >
-                    {availableRoles.length > 0 ? (
-                      availableRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)
-                    ) : (
-                      <>
-                        <option value="Admin">Admin</option>
-                        <option value="Manager">Manager</option>
-                        <option value="Viewer">Viewer</option>
-                      </>
-                    )}
-                  </select>
-                ) : (
-                  <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', padding: '3px 10px', borderRadius: '20px', textTransform: 'uppercase', fontWeight: 700, background: m.role === 'Admin' ? 'var(--primary-light)' : 'var(--border-light)', color: m.role === 'Admin' ? 'var(--primary)' : 'var(--text-muted)' }}>
-                    {m.role}
-                  </span>
-                )}
+              return (
+                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 0', borderBottom: '1px solid var(--border-light)' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800, flexShrink: 0 }}>
+                    {m.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)' }}>{m.name}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{m.email}</div>
+                  </div>
 
-                {canManageMembers && m.id !== user?.id && (
-                  <button onClick={() => handleRemoveMember(m.id)} style={{ cursor: 'pointer', color: 'var(--danger)', padding: '6px', background: 'var(--danger-light)', borderRadius: 'var(--radius-sm)' }} title="Remove member">
-                    <Trash2 size={16} />
-                  </button>
-                )}
-              </div>
-            ))}
+                  {canModifyMember ? (
+                    <select
+                      style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-main)', padding: '6px 12px', borderRadius: 'var(--radius-md)', fontSize: '12px', fontWeight: 600 }}
+                      value={m.role}
+                      onChange={e => handleRoleChange(m.id, e.target.value)}
+                    >
+                      {assignableRolesList.map(r => (
+                        <option key={r.id || r.name} value={r.name}>{r.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span
+                      style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', padding: '3px 10px', borderRadius: '20px', textTransform: 'uppercase', fontWeight: 700, background: m.role === 'Admin' ? 'var(--primary-light)' : 'var(--border-light)', color: m.role === 'Admin' ? 'var(--primary)' : 'var(--text-muted)' }}
+                      title={isHigherRank ? "Insufficient permission: Cannot change role of higher rank member" : ""}
+                    >
+                      {m.role}
+                    </span>
+                  )}
+
+                  {canRemoveMember ? (
+                    <button
+                      onClick={() => { setDeleteMemberTarget(m); setDeleteError(''); }}
+                      style={{ cursor: 'pointer', color: 'var(--danger)', padding: '6px 8px', background: 'var(--danger-light)', border: 'none', borderRadius: 'var(--radius-sm)', display: 'inline-flex', alignItems: 'center' }}
+                      title="Remove member"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  ) : (
+                    isHigherRank && (
+                      <button
+                        disabled
+                        style={{ cursor: 'not-allowed', color: 'var(--text-muted)', padding: '6px 8px', background: 'var(--border-light)', border: 'none', borderRadius: 'var(--radius-sm)', display: 'inline-flex', alignItems: 'center', opacity: 0.5 }}
+                        title="Insufficient permission: Cannot remove higher rank member"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -396,6 +482,28 @@ export default function TeamDetail() {
           onSaved={() => { setShowTaskModal(false); setEditTask(null); loadAll(); }}
         />
       )}
+
+      {/* Confirm Delete Task Modal */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(deleteTaskTarget)}
+        onClose={() => setDeleteTaskTarget(null)}
+        onConfirm={handleDeleteTaskConfirm}
+        title={`Delete task "${deleteTaskTarget?.title}"?`}
+        message="This action cannot be undone."
+        error={deleteError}
+        loading={deleteLoading}
+      />
+
+      {/* Confirm Remove Member Modal */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(deleteMemberTarget)}
+        onClose={() => setDeleteMemberTarget(null)}
+        onConfirm={handleRemoveMemberConfirm}
+        title={`Remove ${deleteMemberTarget?.name} from team?`}
+        message="The user will lose access to team resources and permissions."
+        error={deleteError}
+        loading={deleteLoading}
+      />
     </div>
   );
 }

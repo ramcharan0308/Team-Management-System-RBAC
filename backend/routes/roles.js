@@ -1,6 +1,8 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Role = require('../models/Role');
 const Permission = require('../models/Permission');
+const TeamMember = require('../models/TeamMember');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
@@ -17,9 +19,15 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/roles - Create new role
+// POST /api/roles - Create new role (Requires Admin role)
 router.post('/', async (req, res) => {
   try {
+    const requesterMemberships = await TeamMember.find({ user: req.user.id }).populate('role');
+    const isRequesterAdmin = requesterMemberships.some(m => m.role && m.role.name === 'Admin');
+    if (!isRequesterAdmin) {
+      return res.status(403).json({ error: 'Permission denied: Only Admins can create new roles' });
+    }
+
     const { name, permissions } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Role name is required' });
@@ -44,35 +52,83 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/roles/:id/permissions - Assign/update permissions array to a role
+// Admin: Can edit permissions for any role
+// Manager: Can edit permissions ONLY for the Viewer role
 router.put('/:id/permissions', async (req, res) => {
   try {
-    const { permissions } = req.body; // Array of permission ObjectIds or permission names
+    const requesterMemberships = await TeamMember.find({ user: req.user.id }).populate('role');
+    const isRequesterAdmin = requesterMemberships.some(m => m.role && m.role.name === 'Admin');
+    const isRequesterManager = requesterMemberships.some(m => m.role && m.role.name === 'Manager');
+
+    if (!isRequesterAdmin && !isRequesterManager) {
+      return res.status(403).json({ error: 'Permission denied: Insufficient privileges to edit role permissions' });
+    }
+
+    const targetRole = await Role.findById(req.params.id);
+    if (!targetRole) return res.status(404).json({ error: 'Role not found' });
+
+    if (!isRequesterAdmin && isRequesterManager) {
+      if (targetRole.name !== 'Viewer') {
+        return res.status(403).json({ error: 'Permission denied: Managers can only edit permissions for the Viewer role' });
+      }
+    }
+
+    const { permissions } = req.body;
     if (!Array.isArray(permissions)) {
       return res.status(400).json({ error: 'Permissions must be an array' });
+    }
+
+    let resolvedIds = [];
+    for (const p of permissions) {
+      if (typeof p === 'object' && p !== null) {
+        const idVal = p._id || p.id;
+        if (idVal && mongoose.Types.ObjectId.isValid(idVal)) {
+          const permDoc = await Permission.findById(idVal);
+          if (permDoc) resolvedIds.push(permDoc._id);
+        }
+      } else if (typeof p === 'string') {
+        if (mongoose.Types.ObjectId.isValid(p) && p.match(/^[0-9a-fA-F]{24}$/)) {
+          const permDoc = await Permission.findById(p);
+          if (permDoc) resolvedIds.push(permDoc._id);
+        } else {
+          const permDoc = await Permission.findOne({ name: p.trim().toUpperCase() });
+          if (permDoc) resolvedIds.push(permDoc._id);
+        }
+      }
+    }
+
+    targetRole.permissions = resolvedIds;
+    await targetRole.save();
+
+    const updated = await Role.findById(targetRole._id).populate('permissions');
+    res.json(updated.toJSON());
+  } catch (err) {
+    console.error('Error updating role permissions:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/roles/:id - Delete role (Requires Admin role)
+router.delete('/:id', async (req, res) => {
+  try {
+    const requesterMemberships = await TeamMember.find({ user: req.user.id }).populate('role');
+    const isRequesterAdmin = requesterMemberships.some(m => m.role && m.role.name === 'Admin');
+    if (!isRequesterAdmin) {
+      return res.status(403).json({ error: 'Permission denied: Only Admins can delete roles' });
     }
 
     const role = await Role.findById(req.params.id);
     if (!role) return res.status(404).json({ error: 'Role not found' });
 
-    // Handle case where permissions is an array of IDs or names
-    let resolvedIds = [];
-    for (const p of permissions) {
-      if (typeof p === 'string' && !p.match(/^[0-9a-fA-F]{24}$/)) {
-        // It's a name like "CREATE_TASK"
-        const permDoc = await Permission.findOne({ name: p.toUpperCase() });
-        if (permDoc) resolvedIds.push(permDoc._id);
-      } else {
-        resolvedIds.push(p);
-      }
+    const assignedCount = await TeamMember.countDocuments({ role: req.params.id });
+    if (assignedCount > 0) {
+      return res.status(400).json({ error: 'Cannot delete role because it is currently assigned to users.' });
     }
 
-    role.permissions = resolvedIds;
-    await role.save();
-
-    const updated = await Role.findById(role._id).populate('permissions');
-    res.json(updated.toJSON());
+    await Role.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Role deleted successfully' });
   } catch (err) {
-    console.error('Error updating role permissions:', err);
+    console.error('Error deleting role:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

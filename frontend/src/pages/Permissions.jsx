@@ -1,14 +1,22 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { KeyRound, Plus, ShieldAlert, X } from 'lucide-react';
+import { KeyRound, Plus, Trash2, X } from 'lucide-react';
 import api from '../api';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import { useAuth } from '../context/AuthContext';
 
 export default function Permissions() {
+  const { canAccessAdminPages } = useAuth();
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [permName, setPermName] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Delete modal state
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const fetchPermissions = async () => {
     try {
@@ -25,6 +33,7 @@ export default function Permissions() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
+    if (!canAccessAdminPages) return;
     setSaving(true);
     try {
       await api.post('/permissions', { name: permName });
@@ -38,6 +47,21 @@ export default function Permissions() {
     }
   };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget || !canAccessAdminPages) return;
+    setDeleteLoading(true);
+    setDeleteError('');
+    try {
+      await api.delete(`/permissions/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      fetchPermissions();
+    } catch (err) {
+      setDeleteError(err.response?.data?.error || 'Failed to delete permission key');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   if (loading) return <div style={{ color: 'var(--text-muted)', paddingTop: '60px', textAlign: 'center' }}>Loading system permissions...</div>;
 
   return (
@@ -48,14 +72,16 @@ export default function Permissions() {
           <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.5px', marginBottom: '4px' }}>Permission Keys</h1>
           <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Atomic authorization keys mapped to role definitions across all team workspaces.</p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => setShowModal(true)}
-          style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: 'var(--shadow-sm)' }}
-        >
-          <Plus size={16} /> New Permission Key
-        </motion.button>
+        {canAccessAdminPages && (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setShowModal(true)}
+            style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: 'var(--shadow-sm)' }}
+          >
+            <Plus size={16} /> New Permission Key
+          </motion.button>
+        )}
       </div>
 
       {/* Grid */}
@@ -64,21 +90,33 @@ export default function Permissions() {
           <motion.div
             key={p.id}
             whileHover={{ y: -2 }}
-            style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '18px 20px', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: 'var(--shadow-xs)' }}
+            style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: 'var(--shadow-xs)' }}
           >
-            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--accent-light)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <KeyRound size={20} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--accent-light)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <KeyRound size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '13px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-main)' }}>{p.name}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>System Action Key</div>
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: '13px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-main)' }}>{p.name}</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>System Action Key</div>
-            </div>
+
+            {canAccessAdminPages && (
+              <button
+                onClick={() => { setDeleteTarget(p); setDeleteError(''); }}
+                style={{ cursor: 'pointer', color: 'var(--danger)', background: 'var(--danger-light)', border: 'none', borderRadius: 'var(--radius-sm)', padding: '6px 8px', display: 'inline-flex', alignItems: 'center' }}
+                title="Delete permission key"
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
           </motion.div>
         ))}
       </div>
 
       {/* Create Modal */}
-      {showModal && (
+      {showModal && canAccessAdminPages && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }} onClick={e => e.target === e.currentTarget && setShowModal(false)}>
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '100%', maxWidth: '440px', boxShadow: 'var(--shadow-xl)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
@@ -100,6 +138,17 @@ export default function Permissions() {
           </motion.div>
         </div>
       )}
+
+      {/* Confirm Delete Modal */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        title={`Delete permission key "${deleteTarget?.name}"?`}
+        message="This action cannot be undone and will fail if the key is currently linked to roles."
+        error={deleteError}
+        loading={deleteLoading}
+      />
     </div>
   );
 }

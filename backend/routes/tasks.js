@@ -29,13 +29,15 @@ router.get('/', async (req, res) => {
 
     const formatted = tasks.map(t => {
       const json = t.toJSON();
-      const assignee = t.assignedTo ? t.assignedTo.toJSON() : null;
-      const creator = t.createdBy ? t.createdBy.toJSON() : null;
+      const assigneeDoc = t.assignedTo && typeof t.assignedTo === 'object' ? t.assignedTo : null;
+      const creatorDoc = t.createdBy && typeof t.createdBy === 'object' ? t.createdBy : null;
       return {
         ...json,
-        assigned_to_name: assignee ? assignee.name : null,
-        assigned_to_email: assignee ? assignee.email : null,
-        created_by_name: creator ? creator.name : null,
+        assigned_to: assigneeDoc ? assigneeDoc._id.toString() : (json.assigned_to || null),
+        assignedTo: assigneeDoc ? assigneeDoc._id.toString() : (json.assignedTo || null),
+        assigned_to_name: assigneeDoc ? assigneeDoc.name : null,
+        assigned_to_email: assigneeDoc ? assigneeDoc.email : null,
+        created_by_name: creatorDoc ? creatorDoc.name : null,
       };
     });
 
@@ -51,7 +53,7 @@ router.post('/', requirePermission('CREATE_TASK'), async (req, res) => {
   try {
     const { project_id, team_id, teamId, title, description, due_date, dueDate, priority, assigned_to, assignedTo } = req.body;
     const finalTeamId = team_id || project_id || teamId;
-    const finalAssignee = assigned_to || assignedTo;
+    const finalAssignee = assigned_to || assignedTo || null;
 
     if (!finalTeamId || !title) {
       return res.status(400).json({ error: 'Team ID and title are required' });
@@ -77,13 +79,16 @@ router.post('/', requirePermission('CREATE_TASK'), async (req, res) => {
       .populate('createdBy');
 
     const json = populated.toJSON();
-    const assignee = populated.assignedTo ? populated.assignedTo.toJSON() : null;
-    const creator = populated.createdBy ? populated.createdBy.toJSON() : null;
+    const assigneeDoc = populated.assignedTo && typeof populated.assignedTo === 'object' ? populated.assignedTo : null;
+    const creatorDoc = populated.createdBy && typeof populated.createdBy === 'object' ? populated.createdBy : null;
 
     res.status(201).json({
       ...json,
-      assigned_to_name: assignee ? assignee.name : null,
-      created_by_name: creator ? creator.name : null,
+      assigned_to: assigneeDoc ? assigneeDoc._id.toString() : (json.assigned_to || null),
+      assignedTo: assigneeDoc ? assigneeDoc._id.toString() : (json.assignedTo || null),
+      assigned_to_name: assigneeDoc ? assigneeDoc.name : null,
+      assigned_to_email: assigneeDoc ? assigneeDoc.email : null,
+      created_by_name: creatorDoc ? creatorDoc.name : null,
     });
   } catch (err) {
     console.error('Error creating task:', err);
@@ -117,7 +122,11 @@ router.patch('/:id', async (req, res) => {
     if (due_date !== undefined || dueDate !== undefined) task.dueDate = due_date || dueDate || null;
     if (priority !== undefined) task.priority = priority;
     if (status !== undefined) task.status = status;
-    if (assigned_to !== undefined || assignedTo !== undefined) task.assignedTo = assigned_to || assignedTo || null;
+    
+    if (assigned_to !== undefined || assignedTo !== undefined) {
+      const newAssignee = assigned_to !== undefined ? assigned_to : assignedTo;
+      task.assignedTo = newAssignee ? newAssignee : null;
+    }
 
     await task.save();
 
@@ -126,14 +135,16 @@ router.patch('/:id', async (req, res) => {
       .populate('createdBy');
 
     const json = updated.toJSON();
-    const assignee = updated.assignedTo ? updated.assignedTo.toJSON() : null;
-    const creator = updated.createdBy ? updated.createdBy.toJSON() : null;
+    const assigneeDoc = updated.assignedTo && typeof updated.assignedTo === 'object' ? updated.assignedTo : null;
+    const creatorDoc = updated.createdBy && typeof updated.createdBy === 'object' ? updated.createdBy : null;
 
     res.json({
       ...json,
-      assigned_to_name: assignee ? assignee.name : null,
-      assigned_to_email: assignee ? assignee.email : null,
-      created_by_name: creator ? creator.name : null,
+      assigned_to: assigneeDoc ? assigneeDoc._id.toString() : (json.assigned_to || null),
+      assignedTo: assigneeDoc ? assigneeDoc._id.toString() : (json.assignedTo || null),
+      assigned_to_name: assigneeDoc ? assigneeDoc.name : null,
+      assigned_to_email: assigneeDoc ? assigneeDoc.email : null,
+      created_by_name: creatorDoc ? creatorDoc.name : null,
     });
   } catch (err) {
     console.error('Error updating task:', err);
@@ -142,10 +153,18 @@ router.patch('/:id', async (req, res) => {
 });
 
 // DELETE /api/tasks/:id - delete task
-router.delete('/:id', requirePermission('DELETE_TASK'), async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ error: 'Task not found' });
+
+    const permissions = await getUserPermissions(task.team, req.user.id);
+    const isAssignee = task.assignedTo && task.assignedTo.toString() === req.user.id;
+    const canDelete = permissions.includes('DELETE_TASK') || isAssignee;
+
+    if (!canDelete) {
+      return res.status(403).json({ error: 'Permission denied: DELETE_TASK permission required' });
+    }
 
     await Task.findByIdAndDelete(req.params.id);
     res.json({ message: 'Task deleted successfully' });

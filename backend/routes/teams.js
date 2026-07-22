@@ -10,6 +10,16 @@ const { getUserPermissions, requirePermission } = require('../middleware/rbac');
 const router = express.Router();
 router.use(authenticate);
 
+// Helper to determine role rank weight (Admin > Manager > Viewer)
+function getRoleWeight(roleObjOrName) {
+  const roleName = typeof roleObjOrName === 'string'
+    ? roleObjOrName
+    : (roleObjOrName?.name || '');
+  if (/^Admin$/i.test(roleName)) return 3;
+  if (/^Manager$/i.test(roleName)) return 2;
+  return 1; // Default for Viewer or custom roles
+}
+
 // Helper function to resolve role ID from ID or Role Name string
 async function resolveRoleId(roleInput) {
   if (!roleInput) {
@@ -89,14 +99,14 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/teams/:id - team details
+// GET /api/teams/:id - team details (Resolves dynamic RBAC permissions from MongoDB)
 router.get('/:id', async (req, res) => {
   try {
     const team = await Team.findById(req.params.id);
     if (!team) return res.status(404).json({ error: 'Team not found' });
 
     const currentMember = await TeamMember.findOne({ team: req.params.id, user: req.user.id })
-      .populate({ path: 'role', populate: { path: 'permissions' } });
+      .populate('role');
     if (!currentMember) return res.status(403).json({ error: 'Access denied: You are not a member of this team' });
 
     const allMemberships = await TeamMember.find({ team: req.params.id })
@@ -116,9 +126,8 @@ router.get('/:id', async (req, res) => {
       };
     });
 
-    const userPermissions = currentMember.role && currentMember.role.permissions
-      ? currentMember.role.permissions.map(p => p.name)
-      : [];
+    // Dynamic Permission Resolution Chain: User -> TeamMember -> Role -> Permissions
+    const userPermissions = await getUserPermissions(req.params.id, req.user.id);
 
     res.json({
       ...team.toJSON(),
@@ -153,6 +162,16 @@ router.post('/:id/members', requirePermission('MANAGE_MEMBERS'), async (req, res
     if (existing) return res.status(409).json({ error: 'User is already a team member' });
 
     const finalRoleId = await resolveRoleId(roleId || roleName);
+    const newRoleDoc = await Role.findById(finalRoleId);
+
+    // Role hierarchy check: requester cannot assign a role higher than their own
+    const requesterMember = await TeamMember.findOne({ team: req.params.id, user: req.user.id }).populate('role');
+    const requesterWeight = getRoleWeight(requesterMember?.role);
+    const newRoleWeight = getRoleWeight(newRoleDoc);
+
+    if (newRoleWeight > requesterWeight) {
+      return res.status(403).json({ error: 'Permission denied: Cannot assign a role rank higher than your own' });
+    }
 
     await TeamMember.create({
       team: req.params.id,
@@ -168,11 +187,26 @@ router.post('/:id/members', requirePermission('MANAGE_MEMBERS'), async (req, res
   }
 });
 
-// DELETE /api/teams/:id/members/:userId - remove member (requires MANAGE_MEMBERS permission)
+// DELETE /api/teams/:id/members/:userId - remove member (requires MANAGE_MEMBERS permission + Role Hierarchy)
 router.delete('/:id/members/:userId', requirePermission('MANAGE_MEMBERS'), async (req, res) => {
   try {
     if (req.params.userId === req.user.id) {
       return res.status(400).json({ error: 'Cannot remove yourself from the team' });
+    }
+
+    const requesterMember = await TeamMember.findOne({ team: req.params.id, user: req.user.id }).populate('role');
+    const targetMember = await TeamMember.findOne({ team: req.params.id, user: req.params.userId }).populate('role');
+
+    if (!targetMember) {
+      return res.status(404).json({ error: 'Member not found in team' });
+    }
+
+    const requesterWeight = getRoleWeight(requesterMember?.role);
+    const targetWeight = getRoleWeight(targetMember?.role);
+
+    // Rule: Manager (weight 2) cannot delete Admin (weight 3)
+    if (requesterWeight < targetWeight) {
+      return res.status(403).json({ error: 'Permission denied: Cannot remove a member with a higher role rank than your own' });
     }
 
     await TeamMember.findOneAndDelete({ team: req.params.id, user: req.params.userId });
@@ -183,13 +217,31 @@ router.delete('/:id/members/:userId', requirePermission('MANAGE_MEMBERS'), async
   }
 });
 
-// PUT /api/teams/:teamId/users/:userId/role - Assign / update role to user within a team (requires ASSIGN_ROLE or MANAGE_MEMBERS permission)
+// PUT /api/teams/:teamId/users/:userId/role - Assign / update role to user within a team (requires ASSIGN_ROLE/MANAGE_MEMBERS + Hierarchy)
 router.put('/:teamId/users/:userId/role', requirePermission('ASSIGN_ROLE'), async (req, res) => {
   try {
     const { roleId, role: roleName } = req.body;
     const finalRoleId = await resolveRoleId(roleId || roleName);
+    const newRoleDoc = await Role.findById(finalRoleId);
 
-    let membership = await TeamMember.findOne({ team: req.params.teamId, user: req.params.userId });
+    const requesterMember = await TeamMember.findOne({ team: req.params.teamId, user: req.user.id }).populate('role');
+    const targetMember = await TeamMember.findOne({ team: req.params.teamId, user: req.params.userId }).populate('role');
+
+    const requesterWeight = getRoleWeight(requesterMember?.role);
+    const targetWeight = targetMember ? getRoleWeight(targetMember.role) : 0;
+    const newRoleWeight = getRoleWeight(newRoleDoc);
+
+    // Hierarchy Check 1: Cannot modify an existing member of higher rank than yourself
+    if (targetMember && requesterWeight < targetWeight) {
+      return res.status(403).json({ error: 'Permission denied: Cannot modify the role of a member with a higher rank than your own' });
+    }
+
+    // Hierarchy Check 2: Cannot promote or assign a role rank higher than your own rank
+    if (newRoleWeight > requesterWeight) {
+      return res.status(403).json({ error: 'Permission denied: Cannot assign a role rank higher than your own' });
+    }
+
+    let membership = targetMember;
     if (!membership) {
       membership = await TeamMember.create({
         team: req.params.teamId,
