@@ -37,7 +37,7 @@ db.init().then(() => {
   });
 
   app.listen(PORT, () => {
-    console.log(`🚀 TaskFlow Team Manager server running on port ${PORT}`);
+    console.log(`🚀 Team Management System server running on port ${PORT}`);
     console.log(`   Mode: ${process.env.NODE_ENV || 'development'}`);
   });
 }).catch(err => {

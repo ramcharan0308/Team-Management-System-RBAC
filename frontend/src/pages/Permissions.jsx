@@ -1,46 +1,7 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { KeyRound, Plus, ShieldAlert, X } from 'lucide-react';
 import api from '../api';
-
-const s = {
-  page: { padding: '32px', maxWidth: '800px' },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' },
-  h1: { fontSize: '22px', fontWeight: 700 },
-  btn: {
-    background: 'var(--accent)', color: '#fff', border: 'none',
-    borderRadius: 'var(--radius)', padding: '9px 18px', fontSize: '13px',
-    fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-  },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px' },
-  permCard: {
-    background: 'var(--bg-card)', border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)', padding: '16px',
-    display: 'flex', alignItems: 'center', gap: '10px',
-  },
-  badge: {
-    fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 700,
-    color: 'var(--accent-bright)', letterSpacing: '0.5px',
-  },
-  modal: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px',
-  },
-  modalCard: {
-    background: 'var(--bg-card)', border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-lg)', padding: '28px', width: '100%', maxWidth: '420px',
-  },
-  modalTitle: { fontSize: '18px', fontWeight: 700, marginBottom: '20px' },
-  field: { marginBottom: '16px' },
-  label: { display: 'block', fontSize: '11px', fontFamily: 'var(--mono)', color: 'var(--text-muted)', marginBottom: '6px', letterSpacing: '0.5px' },
-  input: {
-    width: '100%', background: 'var(--bg)', border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)', padding: '10px 14px', color: 'var(--text)', fontSize: '14px',
-  },
-  actions: { display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' },
-  cancelBtn: {
-    background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)',
-    borderRadius: 'var(--radius)', padding: '9px 16px', fontSize: '13px', cursor: 'pointer',
-  },
-};
 
 export default function Permissions() {
   const [permissions, setPermissions] = useState([]);
@@ -77,44 +38,66 @@ export default function Permissions() {
     }
   };
 
-  if (loading) return <div style={{ padding: '60px 32px', color: 'var(--text-muted)' }}>Loading permissions...</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', paddingTop: '60px', textAlign: 'center' }}>Loading system permissions...</div>;
 
   return (
-    <div style={s.page}>
-      <div style={s.header}>
+    <div style={{ maxWidth: '960px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={s.h1}>Permissions</h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>System-wide action keys mapped to roles.</p>
+          <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.5px', marginBottom: '4px' }}>Permission Keys</h1>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Atomic authorization keys mapped to role definitions across all team workspaces.</p>
         </div>
-        <button style={s.btn} onClick={() => setShowModal(true)}>+ New Permission</button>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => setShowModal(true)}
+          style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: 'var(--shadow-sm)' }}
+        >
+          <Plus size={16} /> New Permission Key
+        </motion.button>
       </div>
 
-      <div style={s.grid}>
+      {/* Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
         {permissions.map(p => (
-          <div key={p.id} style={s.permCard}>
-            <span style={{ fontSize: '14px' }}>🔑</span>
-            <span style={s.badge}>{p.name}</span>
-          </div>
+          <motion.div
+            key={p.id}
+            whileHover={{ y: -2 }}
+            style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '18px 20px', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: 'var(--shadow-xs)' }}
+          >
+            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--accent-light)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <KeyRound size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '13px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-main)' }}>{p.name}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>System Action Key</div>
+            </div>
+          </motion.div>
         ))}
       </div>
 
+      {/* Create Modal */}
       {showModal && (
-        <div style={s.modal} onClick={e => e.target === e.currentTarget && setShowModal(false)}>
-          <div style={s.modalCard}>
-            <div style={s.modalTitle}>Create New Permission</div>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }} onClick={e => e.target === e.currentTarget && setShowModal(false)}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '100%', maxWidth: '440px', boxShadow: 'var(--shadow-xl)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)' }}>Create Permission Key</h2>
+              <button style={{ cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => setShowModal(false)}><X size={18} /></button>
+            </div>
             <form onSubmit={handleCreate}>
-              <div style={s.field}>
-                <label style={s.label}>PERMISSION NAME (e.g. AUDIT_LOGS)</label>
-                <input style={s.input} type="text" value={permName} onChange={e => setPermName(e.target.value)} placeholder="e.g. EXPORT_DATA" required autoFocus />
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>PERMISSION KEY NAME (UPPERCASE)</label>
+                <input style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: '14px', fontFamily: 'var(--font-mono)' }} type="text" value={permName} onChange={e => setPermName(e.target.value)} placeholder="e.g. EXPORT_ANALYTICS" required autoFocus />
               </div>
-              <div style={s.actions}>
-                <button type="button" style={s.cancelBtn} onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" style={{ ...s.btn, opacity: saving ? 0.6 : 1 }} disabled={saving}>
-                  {saving ? 'Creating...' : 'Create Permission'}
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button type="button" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: 'var(--radius-md)', padding: '10px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => setShowModal(false)}>Cancel</button>
+                <button type="submit" style={{ background: 'var(--primary)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 20px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }} disabled={saving}>
+                  {saving ? 'Creating...' : 'Create Key'}
                 </button>
               </div>
             </form>
-          </div>
+          </motion.div>
         </div>
       )}
     </div>

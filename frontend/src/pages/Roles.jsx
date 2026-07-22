@@ -1,53 +1,7 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { ShieldCheck, Plus, CheckSquare, Square, X } from 'lucide-react';
 import api from '../api';
-
-const s = {
-  page: { padding: '32px', maxWidth: '1000px' },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' },
-  h1: { fontSize: '22px', fontWeight: 700 },
-  btn: {
-    background: 'var(--accent)', color: '#fff', border: 'none',
-    borderRadius: 'var(--radius)', padding: '9px 18px', fontSize: '13px',
-    fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-  },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '20px' },
-  roleCard: {
-    background: 'var(--bg-card)', border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-lg)', padding: '20px',
-    display: 'flex', flexDirection: 'column', gap: '14px',
-  },
-  roleHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-  roleName: { fontSize: '16px', fontWeight: 700, color: 'var(--accent-bright)' },
-  permCount: { fontSize: '11px', fontFamily: 'var(--mono)', color: 'var(--text-muted)' },
-  permGrid: { display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--bg)', padding: '12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)' },
-  checkboxLabel: {
-    display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px',
-    fontFamily: 'var(--mono)', cursor: 'pointer', userSelect: 'none', color: 'var(--text)',
-  },
-  checkbox: {
-    accentColor: 'var(--accent)', width: '16px', height: '16px', cursor: 'pointer',
-  },
-  modal: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px',
-  },
-  modalCard: {
-    background: 'var(--bg-card)', border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-lg)', padding: '28px', width: '100%', maxWidth: '420px',
-  },
-  modalTitle: { fontSize: '18px', fontWeight: 700, marginBottom: '20px' },
-  field: { marginBottom: '16px' },
-  label: { display: 'block', fontSize: '11px', fontFamily: 'var(--mono)', color: 'var(--text-muted)', marginBottom: '6px', letterSpacing: '0.5px' },
-  input: {
-    width: '100%', background: 'var(--bg)', border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)', padding: '10px 14px', color: 'var(--text)', fontSize: '14px',
-  },
-  actions: { display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' },
-  cancelBtn: {
-    background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)',
-    borderRadius: 'var(--radius)', padding: '9px 16px', fontSize: '13px', cursor: 'pointer',
-  },
-};
 
 export default function Roles() {
   const [roles, setRoles] = useState([]);
@@ -111,70 +65,99 @@ export default function Roles() {
     }
   };
 
-  if (loading) return <div style={{ padding: '60px 32px', color: 'var(--text-muted)' }}>Loading roles...</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', paddingTop: '60px', textAlign: 'center' }}>Loading role matrix...</div>;
 
   return (
-    <div style={s.page}>
-      <div style={s.header}>
+    <div style={{ maxWidth: '1100px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={s.h1}>Roles & Permissions Matrix</h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Create roles and toggle permission checkboxes dynamically.</p>
+          <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.5px', marginBottom: '4px' }}>Roles & Permission Matrix</h1>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Configure reusable role definitions and toggle dynamic permission keys.</p>
         </div>
-        <button style={s.btn} onClick={() => setShowModal(true)}>+ Create Role</button>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => setShowModal(true)}
+          style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: 'var(--shadow-sm)' }}
+        >
+          <Plus size={16} /> Create Role
+        </motion.button>
       </div>
 
-      <div style={s.grid}>
+      {/* Role Cards Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: '20px' }}>
         {roles.map(r => {
           const rolePermIds = r.permissions ? r.permissions.map(p => typeof p === 'object' ? p.id : p) : [];
 
           return (
-            <div key={r.id} style={s.roleCard}>
-              <div style={s.roleHeader}>
-                <div style={s.roleName}>{r.name}</div>
-                <div style={s.permCount}>{rolePermIds.length} permissions</div>
+            <motion.div
+              key={r.id}
+              whileHover={{ y: -2 }}
+              style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '24px', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: '16px' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-light)', paddingBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ShieldCheck size={18} />
+                  </div>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)' }}>{r.name}</div>
+                </div>
+                <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--primary)', background: 'var(--primary-light)', padding: '3px 10px', borderRadius: '20px' }}>
+                  {rolePermIds.length} Key{rolePermIds.length !== 1 ? 's' : ''}
+                </span>
               </div>
 
-              <div style={s.permGrid}>
+              {/* Permission Checkbox Matrix */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--bg)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
                 {permissions.map(p => {
                   const isChecked = rolePermIds.includes(p.id);
 
                   return (
-                    <label key={p.id} style={s.checkboxLabel}>
-                      <input
-                        type="checkbox"
-                        style={s.checkbox}
-                        checked={isChecked}
-                        onChange={() => handleTogglePermission(r, p.id)}
-                      />
-                      <span style={{ color: isChecked ? 'var(--text)' : 'var(--text-muted)' }}>
-                        {p.name}
+                    <label
+                      key={p.id}
+                      onClick={() => handleTogglePermission(r, p.id)}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', userSelect: 'none', transition: 'background-color 0.15s', background: isChecked ? '#ffffff' : 'transparent', border: isChecked ? '1px solid var(--border)' : '1px solid transparent' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {isChecked ? <CheckSquare size={16} color="var(--primary)" /> : <Square size={16} color="var(--text-light)" />}
+                        <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', fontWeight: isChecked ? 700 : 500, color: isChecked ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                          {p.name}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: isChecked ? 'var(--success-text)' : 'var(--text-light)', fontWeight: 600 }}>
+                        {isChecked ? 'GRANTED' : 'DENIED'}
                       </span>
                     </label>
                   );
                 })}
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>
 
+      {/* Create Role Modal */}
       {showModal && (
-        <div style={s.modal} onClick={e => e.target === e.currentTarget && setShowModal(false)}>
-          <div style={s.modalCard}>
-            <div style={s.modalTitle}>Create New Role</div>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }} onClick={e => e.target === e.currentTarget && setShowModal(false)}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '100%', maxWidth: '440px', boxShadow: 'var(--shadow-xl)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)' }}>Create Custom Role</h2>
+              <button style={{ cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => setShowModal(false)}><X size={18} /></button>
+            </div>
             <form onSubmit={handleCreateRole}>
-              <div style={s.field}>
-                <label style={s.label}>ROLE NAME</label>
-                <input style={s.input} type="text" value={newRoleName} onChange={e => setNewRoleName(e.target.value)} placeholder="e.g. Lead Developer" required autoFocus />
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>ROLE NAME</label>
+                <input style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: '14px' }} type="text" value={newRoleName} onChange={e => setNewRoleName(e.target.value)} placeholder="e.g. Lead Engineer" required autoFocus />
               </div>
-              <div style={s.actions}>
-                <button type="button" style={s.cancelBtn} onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" style={{ ...s.btn, opacity: saving ? 0.6 : 1 }} disabled={saving}>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button type="button" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: 'var(--radius-md)', padding: '10px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => setShowModal(false)}>Cancel</button>
+                <button type="submit" style={{ background: 'var(--primary)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 20px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }} disabled={saving}>
                   {saving ? 'Creating...' : 'Create Role'}
                 </button>
               </div>
             </form>
-          </div>
+          </motion.div>
         </div>
       )}
     </div>

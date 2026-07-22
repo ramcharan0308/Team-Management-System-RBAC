@@ -1,64 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, Plus, Users, LayoutGrid, Trash2, UserPlus, Shield, Calendar, X } from 'lucide-react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 
 const STATUSES = ['todo', 'inprogress', 'done'];
-const STATUS_LABELS = { todo: 'To Do', inprogress: 'In Progress', done: 'Done' };
-const STATUS_COLORS = { todo: 'var(--text-muted)', inprogress: 'var(--accent)', done: 'var(--green)' };
-const PRIORITY_COLORS = { low: 'var(--green)', medium: 'var(--yellow)', high: 'var(--red)' };
-const PRIORITY_BG = { low: 'var(--green-dim)', medium: 'var(--yellow-dim)', high: 'var(--red-dim)' };
-
-const s = {
-  page: { padding: '32px', maxWidth: '1100px' },
-  back: { fontSize: '13px', color: 'var(--text-muted)', cursor: 'pointer', marginBottom: '20px', display: 'inline-flex', alignItems: 'center', gap: '6px' },
-  header: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '28px', gap: '20px' },
-  h1: { fontSize: '24px', fontWeight: 700, marginBottom: '4px' },
-  desc: { fontSize: '14px', color: 'var(--text-muted)' },
-  roleBadge: {
-    fontSize: '10px', fontFamily: 'var(--mono)', padding: '3px 10px', borderRadius: '20px',
-    letterSpacing: '0.5px', textTransform: 'uppercase', flexShrink: 0,
-  },
-  permPills: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '10px' },
-  permPill: { fontSize: '10px', fontFamily: 'var(--mono)', padding: '2px 8px', borderRadius: '4px', background: 'var(--accent-dim)', color: 'var(--accent-bright)' },
-  tabs: { display: 'flex', gap: '2px', marginBottom: '24px', background: 'var(--bg-card)', padding: '4px', borderRadius: 'var(--radius)', width: 'fit-content', border: '1px solid var(--border)' },
-  tab: { padding: '7px 18px', borderRadius: '6px', fontSize: '13px', fontWeight: 500, cursor: 'pointer', border: 'none', background: 'none', color: 'var(--text-muted)', transition: 'all 0.15s' },
-  tabActive: { background: 'var(--accent)', color: '#fff' },
-  btn: { background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius)', padding: '9px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' },
-  columns: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' },
-  col: { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '16px', minHeight: '200px' },
-  colHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' },
-  colTitle: { fontSize: '12px', fontFamily: 'var(--mono)', letterSpacing: '1px', textTransform: 'uppercase' },
-  colCount: { fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--mono)', background: 'var(--bg)', padding: '2px 8px', borderRadius: '20px' },
-  taskCard: {
-    background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-    padding: '12px', marginBottom: '10px', cursor: 'pointer', transition: 'border-color 0.15s',
-  },
-  taskTitle: { fontSize: '13px', fontWeight: 500, marginBottom: '8px', lineHeight: 1.4 },
-  taskMeta: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' },
-  badge: { fontSize: '10px', fontFamily: 'var(--mono)', padding: '2px 7px', borderRadius: '20px', letterSpacing: '0.3px' },
-  memberRow: {
-    display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 0',
-    borderBottom: '1px solid var(--border)',
-  },
-  avatar: {
-    width: '36px', height: '36px', borderRadius: '50%', background: 'var(--accent-dim)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: 'var(--accent)', flexShrink: 0,
-  },
-  removeBtn: { background: 'var(--red-dim)', border: '1px solid rgba(248,113,113,0.3)', color: 'var(--red)', borderRadius: 'var(--radius)', padding: '5px 10px', fontSize: '12px', cursor: 'pointer' },
-  roleSelect: { background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '4px 8px', borderRadius: '6px', fontSize: '12px' },
-  // Modal
-  modal: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' },
-  modalCard: { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '28px', width: '100%', maxWidth: '460px', maxHeight: '90vh', overflowY: 'auto' },
-  modalTitle: { fontSize: '18px', fontWeight: 700, marginBottom: '20px' },
-  field: { marginBottom: '14px' },
-  label: { display: 'block', fontSize: '11px', fontFamily: 'var(--mono)', color: 'var(--text-muted)', marginBottom: '5px', letterSpacing: '0.5px' },
-  input: { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '9px 13px', color: 'var(--text)', fontSize: '14px' },
-  select: { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '9px 13px', color: 'var(--text)', fontSize: '14px' },
-  textarea: { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '9px 13px', color: 'var(--text)', fontSize: '14px', resize: 'vertical', minHeight: '80px' },
-  actions: { display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' },
-  cancelBtn: { background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: 'var(--radius)', padding: '9px 16px', fontSize: '13px', cursor: 'pointer' },
-};
+const STATUS_LABELS = { todo: 'To Do', inprogress: 'In Progress', done: 'Completed' };
+const STATUS_COLORS = { todo: '#64748b', inprogress: '#2563eb', done: '#22c55e' };
+const PRIORITY_COLORS = { low: '#15803d', medium: '#b45309', high: '#b91c1c' };
+const PRIORITY_BG = { low: '#f0fdf4', medium: '#fffbeb', high: '#fef2f2' };
 
 function TaskModal({ team, members, onClose, onSaved, task, canEditTask }) {
   const [form, setForm] = useState({
@@ -93,59 +44,62 @@ function TaskModal({ team, members, onClose, onSaved, task, canEditTask }) {
   };
 
   return (
-    <div style={s.modal} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={s.modalCard}>
-        <div style={s.modalTitle}>{task ? 'Edit Task' : 'Create Task'}</div>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '100%', maxWidth: '460px', boxShadow: 'var(--shadow-xl)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)' }}>{task ? 'Edit Task' : 'Create Task'}</h2>
+          <button style={{ cursor: 'pointer', color: 'var(--text-muted)' }} onClick={onClose}><X size={18} /></button>
+        </div>
         <form onSubmit={handleSubmit}>
           {(canEditTask || !task) && (
             <>
-              <div style={s.field}>
-                <label style={s.label}>TITLE</label>
-                <input style={s.input} type="text" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required disabled={task && !canEditTask} placeholder="Task title" />
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>TITLE</label>
+                <input style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: 'var(--text-main)', fontSize: '14px' }} type="text" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required disabled={task && !canEditTask} placeholder="Task title..." />
               </div>
-              <div style={s.field}>
-                <label style={s.label}>DESCRIPTION</label>
-                <textarea style={s.textarea} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Details..." />
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>DESCRIPTION</label>
+                <textarea style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: 'var(--text-main)', fontSize: '14px', minHeight: '80px', resize: 'vertical' }} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Details..." />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div style={s.field}>
-                  <label style={s.label}>PRIORITY</label>
-                  <select style={s.select} value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>PRIORITY</label>
+                  <select style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: 'var(--text-main)', fontSize: '14px' }} value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
                   </select>
                 </div>
-                <div style={s.field}>
-                  <label style={s.label}>DUE DATE</label>
-                  <input style={s.input} type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} />
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>DUE DATE</label>
+                  <input style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: 'var(--text-main)', fontSize: '14px' }} type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} />
                 </div>
               </div>
-              <div style={s.field}>
-                <label style={s.label}>ASSIGN TO</label>
-                <select style={s.select} value={form.assigned_to} onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>ASSIGNEE</label>
+                <select style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: 'var(--text-main)', fontSize: '14px' }} value={form.assigned_to} onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))}>
                   <option value="">Unassigned</option>
                   {members.map(m => <option key={m.id} value={m.id}>{m.name} ({m.role})</option>)}
                 </select>
               </div>
             </>
           )}
-          <div style={s.field}>
-            <label style={s.label}>STATUS</label>
-            <select style={s.select} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{ display: 'block', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>STATUS</label>
+            <select style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: 'var(--text-main)', fontSize: '14px' }} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
               <option value="todo">To Do</option>
               <option value="inprogress">In Progress</option>
-              <option value="done">Done</option>
+              <option value="done">Completed</option>
             </select>
           </div>
-          <div style={s.actions}>
-            <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...s.btn, opacity: saving ? 0.6 : 1 }} disabled={saving}>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <button type="button" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: 'var(--radius-md)', padding: '10px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={onClose}>Cancel</button>
+            <button type="submit" style={{ background: 'var(--primary)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 20px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }} disabled={saving}>
               {saving ? 'Saving...' : task ? 'Save Changes' : 'Create Task'}
             </button>
           </div>
         </form>
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -232,97 +186,127 @@ export default function TeamDetail() {
     }
   };
 
-  if (loading) return <div style={{ padding: '60px 32px', color: 'var(--text-muted)' }}>Loading team...</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', paddingTop: '60px', textAlign: 'center' }}>Loading team workspace...</div>;
   if (!team) return <div style={{ padding: '32px' }}>Team not found</div>;
 
   const tasksByStatus = (status) => tasks.filter(t => t.status === status);
 
   return (
-    <div style={s.page}>
-      <div style={s.back} onClick={() => navigate('/teams')}>← Teams</div>
+    <div style={{ maxWidth: '1150px' }}>
+      {/* Back Button */}
+      <div
+        onClick={() => navigate('/teams')}
+        style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', cursor: 'pointer', marginBottom: '20px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+      >
+        <ArrowLeft size={16} /> Back to Teams
+      </div>
 
-      <div style={s.header}>
+      {/* Header Banner */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '28px', gap: '20px' }}>
         <div>
-          <h1 style={s.h1}>{team.name}</h1>
-          {team.description && <p style={s.desc}>{team.description}</p>}
-          <div style={s.permPills}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+            <h1 style={{ fontSize: '26px', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.5px' }}>{team.name}</h1>
+            <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', padding: '3px 10px', borderRadius: '20px', textTransform: 'uppercase', fontWeight: 700, background: team.role === 'Admin' ? 'var(--primary-light)' : 'var(--border-light)', color: team.role === 'Admin' ? 'var(--primary)' : 'var(--text-muted)' }}>
+              {team.role} Role
+            </span>
+          </div>
+          {team.description && <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>{team.description}</p>}
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '12px' }}>
             {userPermissions.map(p => (
-              <span key={p} style={s.permPill}>{p}</span>
+              <span key={p} style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', padding: '2px 8px', borderRadius: '4px', background: 'var(--primary-light)', color: 'var(--primary)', fontWeight: 600 }}>
+                {p}
+              </span>
             ))}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{
-            ...s.roleBadge,
-            background: team.role === 'Admin' ? 'var(--accent-dim)' : 'rgba(120,120,160,0.15)',
-            color: team.role === 'Admin' ? 'var(--accent-bright)' : 'var(--text-muted)',
-          }}>{team.role}</div>
 
-          {/* DYNAMIC RBAC: Create Task Button hidden if no CREATE_TASK permission */}
-          {canCreateTask && (
-            <button style={s.btn} onClick={() => setShowTaskModal(true)}>+ Task</button>
-          )}
-        </div>
+        {/* Dynamic RBAC Button */}
+        {canCreateTask && (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setShowTaskModal(true)}
+            style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: 'var(--shadow-sm)', flexShrink: 0 }}
+          >
+            <Plus size={16} /> New Task
+          </motion.button>
+        )}
       </div>
 
-      <div style={s.tabs}>
-        {['board', 'members'].map(t => (
-          <button key={t} style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }} onClick={() => setTab(t)}>
-            {t === 'board' ? '⬡ Board' : `◈ Members (${team.members?.length || 0})`}
-          </button>
-        ))}
+      {/* Tabs Switcher */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', background: '#ffffff', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', width: 'fit-content', boxShadow: 'var(--shadow-xs)' }}>
+        <button
+          onClick={() => setTab('board')}
+          style={{ padding: '8px 20px', borderRadius: 'var(--radius-sm)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', background: tab === 'board' ? 'var(--primary)' : 'transparent', color: tab === 'board' ? '#ffffff' : 'var(--text-muted)' }}
+        >
+          <LayoutGrid size={16} /> Kanban Board
+        </button>
+        <button
+          onClick={() => setTab('members')}
+          style={{ padding: '8px 20px', borderRadius: 'var(--radius-sm)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', background: tab === 'members' ? 'var(--primary)' : 'transparent', color: tab === 'members' ? '#ffffff' : 'var(--text-muted)' }}
+        >
+          <Users size={16} /> Members ({team.members?.length || 0})
+        </button>
       </div>
 
+      {/* Tab 1: KANBAN BOARD */}
       {tab === 'board' && (
-        <div style={s.columns}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
           {STATUSES.map(status => {
             const colTasks = tasksByStatus(status);
             return (
-              <div key={status} style={s.col}>
-                <div style={s.colHeader}>
-                  <span style={{ ...s.colTitle, color: STATUS_COLORS[status] }}>{STATUS_LABELS[status]}</span>
-                  <span style={s.colCount}>{colTasks.length}</span>
+              <div key={status} style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px', minHeight: '400px', boxShadow: 'var(--shadow-xs)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border-light)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: STATUS_COLORS[status] }} />
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>{STATUS_LABELS[status]}</span>
+                  </div>
+                  <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-muted)', background: 'var(--bg)', padding: '2px 8px', borderRadius: '20px' }}>{colTasks.length}</span>
                 </div>
+
                 {colTasks.map(task => {
                   const isAssignee = task.assigned_to === user?.id || task.assignedTo === user?.id;
                   const canEditThis = canEditTask || isAssignee;
 
                   return (
-                    <div
+                    <motion.div
                       key={task.id}
-                      style={s.taskCard}
-                      onMouseEnter={e => canEditThis && (e.currentTarget.style.borderColor = 'var(--accent)')}
-                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                      whileHover={canEditThis ? { y: -2 } : {}}
+                      style={{ background: 'var(--bg)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)', padding: '14px', marginBottom: '12px', cursor: canEditThis ? 'pointer' : 'default', transition: 'border-color 0.2s' }}
                       onClick={() => canEditThis && setEditTask(task)}
+                      onMouseEnter={e => canEditThis && (e.currentTarget.style.borderColor = 'var(--primary)')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-light)')}
                     >
-                      <div style={s.taskTitle}>{task.title}</div>
-                      <div style={s.taskMeta}>
-                        <span style={{ ...s.badge, background: PRIORITY_BG[task.priority], color: PRIORITY_COLORS[task.priority] }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px', lineHeight: 1.4 }}>{task.title}</div>
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: PRIORITY_BG[task.priority], color: PRIORITY_COLORS[task.priority], textTransform: 'uppercase' }}>
                           {task.priority}
                         </span>
                         {task.assigned_to_name && (
-                          <span style={{ ...s.badge, background: 'var(--accent-dim)', color: 'var(--accent-bright)' }}>
-                            {task.assigned_to_name}
+                          <span style={{ fontSize: '11px', background: '#ffffff', border: '1px solid var(--border)', padding: '2px 8px', borderRadius: '20px', color: 'var(--text-main)', fontWeight: 500 }}>
+                            👤 {task.assigned_to_name}
                           </span>
                         )}
                         {task.due_date && (
-                          <span style={{ fontSize: '11px', color: new Date(task.due_date) < new Date() && task.status !== 'done' ? 'var(--red)' : 'var(--text-muted)', fontFamily: 'var(--mono)', marginLeft: 'auto' }}>
-                            {task.due_date}
+                          <span style={{ fontSize: '11px', color: new Date(task.due_date) < new Date() && task.status !== 'done' ? 'var(--danger)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Calendar size={12} /> {task.due_date}
                           </span>
                         )}
                       </div>
 
-                      {/* DYNAMIC RBAC: Delete button hidden if no DELETE_TASK permission */}
                       {canDeleteTask && (
-                        <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
+                        <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border-light)', paddingTop: '6px' }}>
                           <button
-                            style={{ fontSize: '11px', color: 'var(--text-dim)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}
                             onClick={e => { e.stopPropagation(); handleDeleteTask(task.id); }}
+                            style={{ cursor: 'pointer', color: 'var(--danger)', opacity: 0.7, padding: '2px' }}
                             title="Delete Task"
-                          >✕</button>
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       )}
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>
@@ -331,15 +315,15 @@ export default function TeamDetail() {
         </div>
       )}
 
+      {/* Tab 2: MEMBERS MANAGEMENT */}
       {tab === 'members' && (
-        <div style={{ maxWidth: '560px' }}>
-          {/* DYNAMIC RBAC: Add member form hidden if no MANAGE_MEMBERS permission */}
+        <div style={{ maxWidth: '640px' }}>
           {canManageMembers && (
-            <div style={{ marginBottom: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px' }}>
-              <div style={{ fontSize: '13px', fontFamily: 'var(--mono)', color: 'var(--text-muted)', letterSpacing: '1px', marginBottom: '12px' }}>ADD MEMBER</div>
-              <form onSubmit={handleAddMember} style={{ display: 'flex', gap: '10px' }}>
-                <input style={{ ...s.input, flex: 1 }} type="email" value={addMemberEmail} onChange={e => setAddMemberEmail(e.target.value)} placeholder="member@email.com" required />
-                <select style={{ ...s.roleSelect, flexShrink: 0 }} value={addMemberRole} onChange={e => setAddMemberRole(e.target.value)}>
+            <div style={{ marginBottom: '24px', background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '24px', boxShadow: 'var(--shadow-xs)' }}>
+              <div style={{ fontSize: '13px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '1px', marginBottom: '12px' }}>INVITE TEAM MEMBER</div>
+              <form onSubmit={handleAddMember} style={{ display: 'flex', gap: '12px' }}>
+                <input style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: '14px' }} type="email" value={addMemberEmail} onChange={e => setAddMemberEmail(e.target.value)} placeholder="colleague@company.com" required />
+                <select style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: '13px', fontWeight: 600 }} value={addMemberRole} onChange={e => setAddMemberRole(e.target.value)}>
                   {availableRoles.length > 0 ? (
                     availableRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)
                   ) : (
@@ -350,24 +334,28 @@ export default function TeamDetail() {
                     </>
                   )}
                 </select>
-                <button type="submit" style={{ ...s.btn, opacity: addingMember ? 0.6 : 1 }} disabled={addingMember}>Add</button>
+                <button type="submit" style={{ background: 'var(--primary)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 20px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: addingMember ? 0.7 : 1 }} disabled={addingMember}>
+                  <UserPlus size={16} /> Add
+                </button>
               </form>
             </div>
           )}
 
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px' }}>
+          <div style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '24px', boxShadow: 'var(--shadow-xs)' }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '16px' }}>Team Roster & Roles</div>
             {team.members?.map(m => (
-              <div key={m.id} style={s.memberRow}>
-                <div style={s.avatar}>{m.name.charAt(0).toUpperCase()}</div>
+              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 0', borderBottom: '1px solid var(--border-light)' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800, flexShrink: 0 }}>
+                  {m.name.charAt(0).toUpperCase()}
+                </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 500 }}>{m.name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>{m.email}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)' }}>{m.name}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{m.email}</div>
                 </div>
 
-                {/* DYNAMIC RBAC: Role assignment dropdown */}
                 {canAssignRole && m.id !== user?.id ? (
                   <select
-                    style={s.roleSelect}
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-main)', padding: '6px 12px', borderRadius: 'var(--radius-md)', fontSize: '12px', fontWeight: 600 }}
                     value={m.role}
                     onChange={e => handleRoleChange(m.id, e.target.value)}
                   >
@@ -382,15 +370,15 @@ export default function TeamDetail() {
                     )}
                   </select>
                 ) : (
-                  <div style={{
-                    fontSize: '10px', fontFamily: 'var(--mono)', padding: '2px 8px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.5px',
-                    background: m.role === 'Admin' ? 'var(--accent-dim)' : 'rgba(120,120,160,0.15)',
-                    color: m.role === 'Admin' ? 'var(--accent-bright)' : 'var(--text-muted)',
-                  }}>{m.role}</div>
+                  <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', padding: '3px 10px', borderRadius: '20px', textTransform: 'uppercase', fontWeight: 700, background: m.role === 'Admin' ? 'var(--primary-light)' : 'var(--border-light)', color: m.role === 'Admin' ? 'var(--primary)' : 'var(--text-muted)' }}>
+                    {m.role}
+                  </span>
                 )}
 
                 {canManageMembers && m.id !== user?.id && (
-                  <button style={s.removeBtn} onClick={() => handleRemoveMember(m.id)}>Remove</button>
+                  <button onClick={() => handleRemoveMember(m.id)} style={{ cursor: 'pointer', color: 'var(--danger)', padding: '6px', background: 'var(--danger-light)', borderRadius: 'var(--radius-sm)' }} title="Remove member">
+                    <Trash2 size={16} />
+                  </button>
                 )}
               </div>
             ))}

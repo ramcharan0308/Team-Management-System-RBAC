@@ -1,293 +1,235 @@
-# TaskFlow — Team Task Manager
+# Team Management System with Role-Based Access Control (RBAC)
 
-A full-stack collaborative task management web application where teams can create projects, assign tasks, and track progress with role-based access control.
+## Description
 
-> Built with Node.js (Express) + sql.js (SQLite) backend and React (Vite) frontend.
+A full-stack MERN application designed to manage **Teams, Users, Roles, and Permissions** using dynamic Role-Based Access Control (RBAC).
 
-## Live Demo
-
-> 🔗 **[Your Railway URL here after deployment]**
+Key architectural concepts:
+- **Multi-Team Membership**: Users can belong to multiple teams simultaneously.
+- **Dynamic Contextual Roles**: A user can hold different roles in different teams (e.g. *Admin* in Team Alpha, *Viewer* in Team Beta).
+- **Dynamic Permission Resolution**: Permissions are never hardcoded (e.g. `if(role === 'admin')`). Instead, a user's permissions are dynamically resolved from their assigned role within a specific team down to granular permission strings.
+- **Middleware-Driven Authorization**: Reusable Express middleware (`requirePermission`) intercepts incoming API calls and enforces authorization checks dynamically based on resolved permissions.
 
 ---
 
 ## Features
 
-### Authentication
-- Secure signup / login with JWT tokens (7-day expiry)
-- Password hashing with bcryptjs
-- Protected routes on both frontend and backend
-
-### Project Management
-- Create projects (creator auto-assigned as Admin)
-- Admin can add members by email, remove members
-- Members can view only their assigned projects
-
-### Task Management (Kanban Board)
-- Create tasks with Title, Description, Due Date, Priority (Low/Medium/High)
-- Assign tasks to project members
-- Drag-free status update: To Do → In Progress → Done
-- Role-based editing: Admins can do everything; Members can only update status of their own tasks
-
-### Dashboard
-- Total tasks count
-- Tasks by status (donut chart)
-- Overdue tasks with warnings
-- Project quick-navigation
-
-### My Tasks
-- Aggregated view of all tasks assigned to the current user
-- Filter by status or overdue
-- Update task status inline
+- **Authentication**: JWT authentication, bcrypt password hashing, and client/server protected routes.
+- **Teams**: Create, view, update, and delete teams.
+- **Users**: User creation, listing, and real-time filtering/search by name or email.
+- **Roles**: Pre-seeded default roles (*Admin*, *Manager*, *Viewer*) and dynamic role creation.
+- **Permissions**: Granular permission keys (`CREATE_TASK`, `EDIT_TASK`, `DELETE_TASK`, `VIEW_ONLY`, `CREATE_TEAM`, `MANAGE_MEMBERS`, `ASSIGN_ROLE`, `DELETE_TEAM`).
+- **Dynamic Permission Resolution**: Real-time permission evaluation based on user-team-role context.
+- **Permission Viewer**: Visual tool to inspect active permissions for any user across any team.
+- **Dashboard**: Real-time project metrics, task status breakdown, overdue task alerts, and user task distribution charts powered by Recharts.
+- **Task Management**: Full Kanban board with task creation, assignment, status tracking, and priority tagging.
+- **Role Assignment**: In-team member management allowing real-time role updates.
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 18, React Router v6, Recharts, Axios, Vite |
-| Backend | Node.js, Express 4 |
-| Database | sql.js (SQLite in pure JS, no native bindings) |
-| Auth | JWT (jsonwebtoken), bcryptjs |
-| Deployment | Railway |
+### Frontend
+- **React** (v19)
+- **Vite** (Build Tool)
+- **Axios** (HTTP Client)
+- **React Router** (Client Routing)
+- **Recharts** (Data Visualization)
+
+### Backend
+- **Node.js** & **Express**
+- **MongoDB** & **Mongoose** (ODM)
+- **JSON Web Token (JWT)** (Authentication)
+- **bcryptjs** (Password Hashing)
+
+---
+
+## Database Design
+
+The system uses 6 Mongoose collections designed with proper relational references:
+
+1. **User**: Stores system user profiles (`name`, `email` [unique], `password`, `createdAt`, `updatedAt`).
+2. **Team**: Represents collaborative groups/teams (`name`, `description`, `createdBy` [ref User], `createdAt`, `updatedAt`).
+3. **Permission**: Stores granular system permissions (`name` [unique], e.g., `CREATE_TASK`, `EDIT_TASK`).
+4. **Role**: Defines roles and maps them to permissions (`name`, `permissions` [Array of ref Permission]).
+5. **TeamMember**: **Core mapping collection** (`team` [ref Team], `user` [ref User], `role` [ref Role]). Implements compound unique index `{ team: 1, user: 1 }` allowing users to have distinct roles per team.
+6. **Task**: Represents tasks assigned within a team (`team` [ref Team], `title`, `description`, `dueDate`, `priority`, `status`, `assignedTo` [ref User], `createdBy` [ref User]).
+
+### Relationships Diagram
+
+```
+[User] ─── (1:N) ─── [TeamMember] ─── (N:1) ─── [Team]
+                          │
+                       (N:1)
+                          │
+                        [Role] ─── (N:M) ─── [Permission]
+```
+
+---
+
+## Architecture
+
+Request authorization flow:
+
+```
+Client (React App)
+       │ (Sends HTTP Header: Authorization: Bearer <JWT>)
+       ▼
+JWT Authentication Middleware (Verifies user token & attaches req.user)
+       │
+       ▼
+Express Route Handler
+       │
+       ▼
+RBAC Middleware (requirePermission)
+  ├─ 1. Resolves teamId from request context
+  ├─ 2. Queries TeamMember for (teamId, userId)
+  ├─ 3. Populates Role -> Permissions
+  └─ 4. Checks if required permission exists (Allow or Deny 403)
+       │
+       ▼
+MongoDB Database Execution
+```
+
+---
+
+## API Documentation
+
+### Authentication
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `POST` | `/api/auth/signup` | Register new user | No |
+| `POST` | `/api/auth/login` | Authenticate user & receive JWT token | No |
+| `GET` | `/api/auth/me` | Fetch authenticated user profile | Yes |
+
+### Users
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/api/users` | List users (supports `?search=term`) | Yes |
+| `POST` | `/api/users` | Create user profile | Yes |
+
+### Teams
+| Method | Endpoint | Description | Auth Required | Permission Required |
+|---|---|---|---|---|
+| `GET` | `/api/teams` | List current user's teams | Yes | - |
+| `POST` | `/api/teams` | Create new team | Yes | - |
+| `GET` | `/api/teams/:id` | Fetch team details & members | Yes | Member of team |
+| `DELETE` | `/api/teams/:id` | Delete team | Yes | `DELETE_TEAM` |
+
+### Membership & Role Assignment
+| Method | Endpoint | Description | Auth Required | Permission Required |
+|---|---|---|---|---|
+| `POST` | `/api/teams/:id/members` | Add member to team | Yes | `MANAGE_MEMBERS` |
+| `DELETE` | `/api/teams/:id/members/:userId` | Remove member from team | Yes | `MANAGE_MEMBERS` |
+| `PUT` | `/api/teams/:teamId/users/:userId/role` | Change user role in team | Yes | `ASSIGN_ROLE` |
+| `GET` | `/api/teams/:teamId/users/:userId/permissions` | Resolve active user permissions | Yes | - |
+
+### Roles
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/api/roles` | List all roles with permissions | Yes |
+| `POST` | `/api/roles` | Create new role | Yes |
+| `PUT` | `/api/roles/:id/permissions` | Update permissions assigned to role | Yes |
+
+### Permissions
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/api/permissions` | List all system permissions | Yes |
+| `POST` | `/api/permissions` | Create new permission key | Yes |
+
+### Tasks
+| Method | Endpoint | Description | Auth Required | Permission Required |
+|---|---|---|---|---|
+| `GET` | `/api/tasks?team_id=X` | List tasks in team | Yes | Member of team |
+| `POST` | `/api/tasks` | Create task | Yes | `CREATE_TASK` |
+| `PATCH` | `/api/tasks/:id` | Update task status or details | Yes | `EDIT_TASK` (or assignee status update) |
+| `DELETE` | `/api/tasks/:id` | Delete task | Yes | `DELETE_TASK` |
+
+### Dashboard
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/api/dashboard` | Global metrics across user's teams | Yes |
+| `GET` | `/api/dashboard?team_id=X` | Team-specific metrics & task breakdown | Yes |
 
 ---
 
 ## Project Structure
 
 ```
-taskmanager/
-├── backend/
-│   ├── middleware/
-│   │   └── auth.js          # JWT middleware
-│   ├── routes/
-│   │   ├── auth.js          # /api/auth
-│   │   ├── projects.js      # /api/projects
-│   │   ├── tasks.js         # /api/tasks
-│   │   └── dashboard.js     # /api/dashboard
-│   ├── database.js          # sql.js DB init & wrapper
-│   ├── server.js            # Express app entry
-│   ├── .env.example
-│   └── package.json
-├── frontend/
-│   ├── src/
-│   │   ├── context/
+.
+├── backend
+│   ├── models
+│   │   ├── User.js
+│   │   ├── Team.js
+│   │   ├── Role.js
+│   │   ├── Permission.js
+│   │   ├── TeamMember.js
+│   │   └── Task.js
+│   ├── middleware
+│   │   ├── auth.js
+│   │   └── rbac.js
+│   ├── routes
+│   │   ├── auth.js
+│   │   ├── users.js
+│   │   ├── teams.js
+│   │   ├── roles.js
+│   │   ├── permissions.js
+│   │   ├── tasks.js
+│   │   └── dashboard.js
+│   ├── database.js
+│   ├── server.js
+│   ├── package.json
+│   ├── .env
+│   └── .env.example
+├── frontend
+│   ├── src
+│   │   ├── components
+│   │   │   └── Layout.jsx
+│   │   ├── context
 │   │   │   └── AuthContext.jsx
-│   │   ├── pages/
+│   │   ├── pages
 │   │   │   ├── AuthPage.jsx
 │   │   │   ├── Dashboard.jsx
-│   │   │   ├── Projects.jsx
-│   │   │   ├── ProjectDetail.jsx
+│   │   │   ├── Teams.jsx
+│   │   │   ├── TeamDetail.jsx
+│   │   │   ├── Users.jsx
+│   │   │   ├── Roles.jsx
+│   │   │   ├── Permissions.jsx
+│   │   │   ├── PermissionViewer.jsx
 │   │   │   └── MyTasks.jsx
-│   │   ├── components/
-│   │   │   └── Layout.jsx
 │   │   ├── api.js
 │   │   ├── App.jsx
+│   │   ├── main.jsx
 │   │   └── index.css
-│   ├── .env.example
-│   └── package.json
-├── railway.toml
-├── nixpacks.toml
+│   ├── package.json
+│   └── vite.config.js
 └── README.md
 ```
 
 ---
 
-## Local Development Setup
+## Getting Started
 
-### Prerequisites
-- Node.js 18+
-- npm 9+
-
-### 1. Clone the repository
-
+### Installation
 ```bash
-git clone https://github.com/YOUR_USERNAME/taskmanager.git
-cd taskmanager
+# Install dependencies for backend and frontend
+npm run install:all
 ```
 
-### 2. Backend Setup
+### Environment Configuration
+Copy `backend/.env.example` to `backend/.env` and update configuration:
+```env
+MONGODB_URI=mongodb://127.0.0.1:27017/taskmanager
+JWT_SECRET=super-secret-key
+PORT=5000
+NODE_ENV=development
+```
 
+### Running Locally
 ```bash
-cd backend
-cp .env.example .env
-# Edit .env with your values:
-# JWT_SECRET=your-long-random-secret
-# PORT=5000
+# Start backend server
+npm run dev:backend
 
-npm install
-npm start
-# API running at http://localhost:5000
+# Start frontend application
+npm run dev:frontend
 ```
-
-### 3. Frontend Setup (new terminal)
-
-```bash
-cd frontend
-cp .env.example .env
-# .env should contain:
-# VITE_API_URL=http://localhost:5000/api
-
-npm install
-npm run dev
-# App running at http://localhost:5173
-```
-
-### 4. Open the app
-
-Visit [http://localhost:5173](http://localhost:5173) and sign up.
-
----
-
-## API Reference
-
-### Auth
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/auth/signup` | Register new user |
-| POST | `/api/auth/login` | Login and get JWT |
-| GET | `/api/auth/me` | Get current user |
-
-### Projects
-| Method | Endpoint | Auth | Role |
-|---|---|---|---|
-| GET | `/api/projects` | ✓ | Any |
-| POST | `/api/projects` | ✓ | Any |
-| GET | `/api/projects/:id` | ✓ | Member+ |
-| POST | `/api/projects/:id/members` | ✓ | Admin |
-| DELETE | `/api/projects/:id/members/:userId` | ✓ | Admin |
-| DELETE | `/api/projects/:id` | ✓ | Admin |
-
-### Tasks
-| Method | Endpoint | Auth | Role |
-|---|---|---|---|
-| GET | `/api/tasks?project_id=X` | ✓ | Member+ |
-| POST | `/api/tasks` | ✓ | Admin |
-| PATCH | `/api/tasks/:id` | ✓ | Admin or Assignee |
-| DELETE | `/api/tasks/:id` | ✓ | Admin |
-
-### Dashboard
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/dashboard` | Global stats |
-| GET | `/api/dashboard?project_id=X` | Project stats |
-
----
-
-## Deployment on Railway
-
-### Step 1: Push to GitHub
-
-Run these commands **inside the `taskmanager/` folder** (not your user home directory):
-
-```bash
-cd taskmanager
-git init
-git add .
-git commit -m "Team Task Manager - full stack app"
-git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/taskmanager.git
-git push -u origin main
-```
-
-> If `git init` was accidentally run in `C:\Users\HP`, create a fresh repo only in `taskmanager/` as shown above.
-
-### Step 2: Deploy on Railway
-
-1. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**
-2. Select your repository
-3. Railway auto-detects `nixpacks.toml` and builds
-
-### Step 3: Set Environment Variables
-
-In Railway dashboard → your service → **Variables**, add:
-
-| Variable | Value |
-|---|---|
-| `JWT_SECRET` | Long random string (32+ chars) — **required** |
-| `NODE_ENV` | `production` — serves the React build from the API |
-| `DB_PATH` | `/data/taskmanager.db` — use with a volume (step 4) |
-
-> Railway sets `PORT` automatically. Do **not** hard-code it.
->
-> The frontend is served by the backend in production (`frontend/dist`).
-> No separate frontend service or `VITE_API_URL` is needed (the app uses `/api` on the same host).
-
-### Step 4: Add a Volume (recommended)
-
-Railway’s filesystem is ephemeral. Without a volume, your SQLite DB resets on every redeploy.
-
-1. In your service → **Volumes** → **Add Volume**
-2. Mount path: `/data`
-3. Set variable: `DB_PATH=/data/taskmanager.db`
-
-### Step 5: Generate Public URL
-
-1. Service → **Settings** → **Networking** → **Generate Domain**
-2. Copy the URL (e.g. `https://taskmanager-production-xxxx.up.railway.app`)
-3. Paste it into this README under **Live Demo** and in your submission
-
-### Step 6: Verify deployment
-
-- `https://YOUR-URL.up.railway.app/api/health` → `{"status":"ok",...}`
-- `https://YOUR-URL.up.railway.app/` → login/signup page
-- Sign up, create a project, add a task
-
----
-
-## Database Design
-
-### Users
-```sql
-id, name, email (unique), password (hashed), created_at
-```
-
-### Projects
-```sql
-id, name, description, created_by (→ users), created_at
-```
-
-### Project Members
-```sql
-id, project_id (→ projects), user_id (→ users), role (admin|member), joined_at
-UNIQUE(project_id, user_id)
-```
-
-### Tasks
-```sql
-id, project_id (→ projects), title, description, due_date,
-priority (low|medium|high), status (todo|inprogress|done),
-assigned_to (→ users), created_by (→ users), created_at, updated_at
-```
-
----
-
-## Role-Based Access Control
-
-| Action | Admin | Member |
-|---|---|---|
-| Create project | ✓ | ✓ (becomes admin) |
-| Add/remove members | ✓ | ✗ |
-| Create tasks | ✓ | ✗ |
-| Edit any task field | ✓ | ✗ |
-| Update own task status | ✓ | ✓ |
-| Delete tasks | ✓ | ✗ |
-| Delete project | ✓ | ✗ |
-| View project & tasks | ✓ | ✓ |
-
----
-
-## Security Notes
-
-- Passwords hashed with bcrypt (salt rounds: 10)
-- JWT tokens signed with configurable secret, expire in 7 days
-- All API routes (except auth) require valid JWT
-- Role checks enforced server-side on every request
-- SQL parameters use parameterized queries (no SQL injection)
-- CORS configured to restrict origins in production
-
----
-
-## License
-
-MIT

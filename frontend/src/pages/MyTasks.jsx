@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 
-const STATUS_LABELS = { todo: 'To Do', inprogress: 'In Progress', done: 'Done' };
 const STATUS_COLORS = { todo: 'var(--text-muted)', inprogress: 'var(--accent)', done: 'var(--green)' };
 const PRIORITY_COLORS = { low: 'var(--green)', medium: 'var(--yellow)', high: 'var(--red)' };
 const PRIORITY_BG = { low: 'var(--green-dim)', medium: 'var(--yellow-dim)', high: 'var(--red-dim)' };
@@ -35,7 +34,6 @@ const s = {
 export default function MyTasks() {
   const { user } = useAuth();
   const [allTasks, setAllTasks] = useState([]);
-  const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const navigate = useNavigate();
@@ -43,32 +41,42 @@ export default function MyTasks() {
   useEffect(() => {
     const loadAll = async () => {
       try {
-        const projRes = await api.get('/projects');
-        setProjects(projRes.data);
+        const teamRes = await api.get('/teams').catch(() => api.get('/projects'));
+        const teamsList = teamRes.data || [];
         const taskArrays = await Promise.all(
-          projRes.data.map(p => api.get(`/tasks?project_id=${p.id}`).then(r => r.data.map(t => ({ ...t, project_name: p.name, project_id: p.id }))))
+          teamsList.map(t => api.get(`/tasks?team_id=${t.id}`).then(r => r.data.map(tk => ({ ...tk, team_name: t.name, team_id: t.id }))))
         );
-        const mine = taskArrays.flat().filter(t => t.assigned_to === user.id);
+        const mine = taskArrays.flat().filter(t => (t.assigned_to === user?.id || t.assignedTo === user?.id));
         setAllTasks(mine);
+      } catch (err) {
+        console.error('Error loading my tasks:', err);
       } finally {
         setLoading(false);
       }
     };
-    loadAll();
-  }, [user.id]);
+    if (user?.id) loadAll();
+  }, [user]);
 
   const handleStatusChange = async (task, newStatus) => {
-    await api.patch(`/tasks/${task.id}`, { status: newStatus });
-    setAllTasks(tasks => tasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+    try {
+      await api.patch(`/tasks/${task.id}`, { status: newStatus });
+      setAllTasks(tasks => tasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update task status');
+    }
   };
 
   const filtered = allTasks.filter(t => {
+    const dueDateVal = t.due_date || t.dueDate;
     if (filter === 'all') return true;
-    if (filter === 'overdue') return t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done';
+    if (filter === 'overdue') return dueDateVal && new Date(dueDateVal) < new Date() && t.status !== 'done';
     return t.status === filter;
   });
 
-  const overdue = allTasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done').length;
+  const overdue = allTasks.filter(t => {
+    const dueDateVal = t.due_date || t.dueDate;
+    return dueDateVal && new Date(dueDateVal) < new Date() && t.status !== 'done';
+  }).length;
 
   const filters = [
     { key: 'all', label: `All (${allTasks.length})` },
@@ -83,7 +91,7 @@ export default function MyTasks() {
   return (
     <div style={s.page}>
       <h1 style={s.h1}>My Tasks</h1>
-      <p style={s.sub}>Tasks assigned to you across all projects.</p>
+      <p style={s.sub}>Tasks assigned to you across all teams.</p>
 
       <div style={s.filter}>
         {filters.map(f => (
@@ -102,36 +110,39 @@ export default function MyTasks() {
           </p>
         </div>
       ) : (
-        filtered.map(task => (
-          <div key={task.id} style={s.taskCard}>
-            <div style={{ ...s.statusDot, background: STATUS_COLORS[task.status] }} />
-            <div style={s.taskBody}>
-              <div style={s.taskTitle}>{task.title}</div>
-              {task.description && <div style={s.taskDesc}>{task.description}</div>}
-              <div style={s.taskMeta}>
-                <span style={{ ...s.badge, background: PRIORITY_BG[task.priority], color: PRIORITY_COLORS[task.priority] }}>{task.priority}</span>
-                <span
-                  style={{ ...s.badge, background: 'var(--accent-dim)', color: 'var(--accent-bright)', cursor: 'pointer' }}
-                  onClick={() => navigate(`/projects/${task.project_id}`)}
-                >{task.project_name}</span>
-                {task.due_date && (
-                  <span style={{ fontSize: '11px', fontFamily: 'var(--mono)', color: new Date(task.due_date) < new Date() && task.status !== 'done' ? 'var(--red)' : 'var(--text-muted)' }}>
-                    Due {task.due_date}
-                  </span>
-                )}
+        filtered.map(task => {
+          const dueDateVal = task.due_date || task.dueDate;
+          return (
+            <div key={task.id} style={s.taskCard}>
+              <div style={{ ...s.statusDot, background: STATUS_COLORS[task.status] }} />
+              <div style={s.taskBody}>
+                <div style={s.taskTitle}>{task.title}</div>
+                {task.description && <div style={s.taskDesc}>{task.description}</div>}
+                <div style={s.taskMeta}>
+                  <span style={{ ...s.badge, background: PRIORITY_BG[task.priority], color: PRIORITY_COLORS[task.priority] }}>{task.priority}</span>
+                  <span
+                    style={{ ...s.badge, background: 'var(--accent-dim)', color: 'var(--accent-bright)', cursor: 'pointer' }}
+                    onClick={() => navigate(`/teams/${task.team_id}`)}
+                  >{task.team_name}</span>
+                  {dueDateVal && (
+                    <span style={{ fontSize: '11px', fontFamily: 'var(--mono)', color: new Date(dueDateVal) < new Date() && task.status !== 'done' ? 'var(--red)' : 'var(--text-muted)' }}>
+                      Due {dueDateVal}
+                    </span>
+                  )}
+                </div>
               </div>
+              <select
+                style={s.statusSelect}
+                value={task.status}
+                onChange={e => handleStatusChange(task, e.target.value)}
+              >
+                <option value="todo">To Do</option>
+                <option value="inprogress">In Progress</option>
+                <option value="done">Done</option>
+              </select>
             </div>
-            <select
-              style={s.statusSelect}
-              value={task.status}
-              onChange={e => handleStatusChange(task, e.target.value)}
-            >
-              <option value="todo">To Do</option>
-              <option value="inprogress">In Progress</option>
-              <option value="done">Done</option>
-            </select>
-          </div>
-        ))
+          );
+        })
       )}
     </div>
   );

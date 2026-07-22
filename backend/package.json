@@ -1,7 +1,7 @@
 {
-  "name": "taskmanager-backend",
+  "name": "team-management-backend",
   "version": "1.0.0",
-  "description": "Team Task Manager Backend API",
+  "description": "Team Management System Backend API with RBAC",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

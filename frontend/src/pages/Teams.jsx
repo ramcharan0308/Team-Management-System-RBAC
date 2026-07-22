@@ -1,61 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Building2, Plus, Users, CheckSquare, ArrowRight, X } from 'lucide-react';
 import api from '../api';
-
-const s = {
-  page: { padding: '32px', maxWidth: '960px' },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' },
-  h1: { fontSize: '22px', fontWeight: 700 },
-  btn: {
-    background: 'var(--accent)', color: '#fff', border: 'none',
-    borderRadius: 'var(--radius)', padding: '9px 18px', fontSize: '13px',
-    fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-  },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' },
-  card: {
-    background: 'var(--bg-card)', border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-lg)', padding: '20px', cursor: 'pointer',
-    transition: 'border-color 0.15s, transform 0.15s',
-    display: 'flex', flexDirection: 'column', gap: '10px',
-  },
-  cardHeader: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' },
-  cardTitle: { fontSize: '15px', fontWeight: 600, lineHeight: 1.3 },
-  roleBadge: {
-    fontSize: '10px', fontFamily: 'var(--mono)', padding: '2px 8px', borderRadius: '20px',
-    letterSpacing: '0.5px', textTransform: 'uppercase', flexShrink: 0,
-  },
-  desc: { fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 },
-  meta: { display: 'flex', gap: '12px', fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' },
-  empty: {
-    textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)',
-    border: '2px dashed var(--border)', borderRadius: 'var(--radius-lg)',
-  },
-  modal: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px',
-  },
-  modalCard: {
-    background: 'var(--bg-card)', border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-lg)', padding: '28px', width: '100%', maxWidth: '420px',
-  },
-  modalTitle: { fontSize: '18px', fontWeight: 700, marginBottom: '20px' },
-  field: { marginBottom: '16px' },
-  label: { display: 'block', fontSize: '11px', fontFamily: 'var(--mono)', color: 'var(--text-muted)', marginBottom: '6px', letterSpacing: '0.5px' },
-  input: {
-    width: '100%', background: 'var(--bg)', border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)', padding: '10px 14px', color: 'var(--text)', fontSize: '14px',
-  },
-  textarea: {
-    width: '100%', background: 'var(--bg)', border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)', padding: '10px 14px', color: 'var(--text)', fontSize: '14px',
-    resize: 'vertical', minHeight: '80px',
-  },
-  actions: { display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' },
-  cancelBtn: {
-    background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)',
-    borderRadius: 'var(--radius)', padding: '9px 16px', fontSize: '13px', cursor: 'pointer',
-  },
-};
 
 export default function Teams() {
   const [teams, setTeams] = useState([]);
@@ -84,71 +31,101 @@ export default function Teams() {
     }
   };
 
-  if (loading) return <div style={{ ...s.page, color: 'var(--text-muted)', paddingTop: '80px', textAlign: 'center' }}>Loading teams...</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', paddingTop: '60px', textAlign: 'center' }}>Loading team workspaces...</div>;
 
   return (
-    <div style={s.page}>
-      <div style={s.header}>
-        <h1 style={s.h1}>Teams</h1>
-        <button style={s.btn} onClick={() => setShowModal(true)}>+ New Team</button>
+    <div style={{ maxWidth: '1100px' }}>
+      {/* Page Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
+        <div>
+          <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.5px', marginBottom: '4px' }}>Team Workspaces</h1>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Collaborative workspaces with dynamic role assignment and RBAC controls.</p>
+        </div>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => setShowModal(true)}
+          style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: 'var(--shadow-sm)' }}
+        >
+          <Plus size={16} /> New Team Workspace
+        </motion.button>
       </div>
 
       {teams.length === 0 ? (
-        <div style={s.empty}>
-          <p style={{ fontSize: '16px', marginBottom: '8px' }}>No teams yet</p>
-          <p style={{ fontSize: '13px', marginBottom: '16px' }}>Create your first team to start collaborating</p>
-          <button style={s.btn} onClick={() => setShowModal(true)}>+ Create Team</button>
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#ffffff', border: '2px dashed var(--border)', borderRadius: 'var(--radius-lg)' }}>
+          <Building2 size={40} color="var(--text-light)" style={{ marginBottom: '12px' }} />
+          <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '4px' }}>No teams joined yet</p>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>Create your first team workspace to start inviting members.</p>
+          <button
+            onClick={() => setShowModal(true)}
+            style={{ background: 'var(--primary)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Plus size={16} /> Create Team
+          </button>
         </div>
       ) : (
-        <div style={s.grid}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
           {teams.map(t => (
-            <div
+            <motion.div
               key={t.id}
-              style={s.card}
+              whileHover={{ y: -3 }}
+              style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '24px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', transition: 'border-color 0.2s, box-shadow 0.2s' }}
               onClick={() => navigate(`/teams/${t.id}`)}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
             >
-              <div style={s.cardHeader}>
-                <div style={s.cardTitle}>{t.name}</div>
-                <div style={{
-                  ...s.roleBadge,
-                  background: t.role === 'Admin' ? 'var(--accent-dim)' : 'rgba(120,120,160,0.15)',
-                  color: t.role === 'Admin' ? 'var(--accent-bright)' : 'var(--text-muted)',
-                }}>{t.role}</div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Building2 size={20} />
+                    </div>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.3 }}>{t.name}</div>
+                  </div>
+                  <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', padding: '3px 10px', borderRadius: '20px', textTransform: 'uppercase', fontWeight: 700, background: t.role === 'Admin' ? 'var(--primary-light)' : 'var(--border-light)', color: t.role === 'Admin' ? 'var(--primary)' : 'var(--text-muted)' }}>
+                    {t.role}
+                  </span>
+                </div>
+                {t.description && <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '20px' }}>{t.description}</p>}
               </div>
-              {t.description && <div style={s.desc}>{t.description}</div>}
-              <div style={s.meta}>
-                <span>{t.member_count} member{t.member_count !== 1 ? 's' : ''}</span>
-                <span>·</span>
-                <span>{t.task_count} task{t.task_count !== 1 ? 's' : ''}</span>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '16px', borderTop: '1px solid var(--border-light)', fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                <div style={{ display: 'flex', gap: '14px' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Users size={14} /> {t.member_count} members</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><CheckSquare size={14} /> {t.task_count} tasks</span>
+                </div>
+                <ArrowRight size={16} color="var(--primary)" />
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       )}
 
+      {/* New Team Modal */}
       {showModal && (
-        <div style={s.modal} onClick={e => e.target === e.currentTarget && setShowModal(false)}>
-          <div style={s.modalCard}>
-            <div style={s.modalTitle}>New Team</div>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }} onClick={e => e.target === e.currentTarget && setShowModal(false)}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '100%', maxWidth: '440px', boxShadow: 'var(--shadow-xl)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)' }}>Create Team Workspace</h2>
+              <button style={{ cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => setShowModal(false)}><X size={18} /></button>
+            </div>
             <form onSubmit={handleCreate}>
-              <div style={s.field}>
-                <label style={s.label}>TEAM NAME</label>
-                <input style={s.input} type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Engineering Alpha" required autoFocus />
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', letterSpacing: '0.5px' }}>TEAM NAME</label>
+                <input style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: 'var(--text-main)', fontSize: '14px' }} type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Platform Engineering" required autoFocus />
               </div>
-              <div style={s.field}>
-                <label style={s.label}>DESCRIPTION (optional)</label>
-                <textarea style={s.textarea} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="What is this team responsible for?" />
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', letterSpacing: '0.5px' }}>DESCRIPTION (OPTIONAL)</label>
+                <textarea style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: 'var(--text-main)', fontSize: '14px', minHeight: '80px', resize: 'vertical' }} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="What is this team responsible for?" />
               </div>
-              <div style={s.actions}>
-                <button type="button" style={s.cancelBtn} onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" style={{ ...s.btn, opacity: saving ? 0.6 : 1 }} disabled={saving}>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button type="button" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: 'var(--radius-md)', padding: '10px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => setShowModal(false)}>Cancel</button>
+                <button type="submit" style={{ background: 'var(--primary)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 20px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }} disabled={saving}>
                   {saving ? 'Creating...' : 'Create Team'}
                 </button>
               </div>
             </form>
-          </div>
+          </motion.div>
         </div>
       )}
     </div>
